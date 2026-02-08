@@ -1,0 +1,143 @@
+/* Credit Display Styles */
+
+.credit-display {
+    position: relative;
+    padding: 0.75rem 1rem;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.credit-display:hover {
+    background: rgba(15, 23, 42, 0.8);
+    border-color: rgba(244, 63, 94, 0.3);
+}
+
+.credit-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.credit-icon {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, rgba(244, 63, 94, 0.2), rgba(236, 72, 153, 0.2));
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #f43f5e;
+}
+
+.credit-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.credit-label {
+    font-size: 0.75rem;
+    color: #9ca3af;
+    font-weight: 500;
+}
+
+.credit-amount {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #10b981;
+    line-height: 1;
+}
+
+.credit-amount.medium {
+    color: #f59e0b;
+}
+
+.credit-amount.low {
+    color: #ef4444;
+}
+
+.credit-bar {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.credit-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #10b981, #34d399);
+    border-radius: 10px;
+    transition: width 0.3s ease;
+}
+
+.credit-bar-fill.medium {
+    background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.credit-bar-fill.low {
+    background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+.credit-tooltip {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    background: rgba(15, 23, 42, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 1rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    z-index: 1000;
+    animation: fadeIn 0.2s;
+    min-width: 220px;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.tooltip-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    font-size: 0.875rem;
+    color: #d1d5db;
+}
+
+.tooltip-row:not(:last-child) {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tooltip-row strong {
+    color: #f3f4f6;
+}
+
+.tooltip-warning {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    color: #fca5a5;
+    font-size: 0.8rem;
+    text-align: center;
+}
+
+.tooltip-btn {
+    margin-top: 0.75rem;
+    width: 100%;
+}

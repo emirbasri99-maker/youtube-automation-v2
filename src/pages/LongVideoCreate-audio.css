@@ -1,0 +1,41 @@
+.loading-voices {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  color: var(--text-muted);
+}
+
+.loading-voices p {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+}
+
+.audio-player {
+  padding: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.audio-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.audio-header h4 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.audio-element {
+  width: 100%;
+  margin-bottom: 0.75rem;
+}
+
+.audio-info {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  text-align: center;
+}

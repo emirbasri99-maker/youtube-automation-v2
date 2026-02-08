@@ -1,0 +1,115 @@
+/* Video Assembly Section Styles */
+
+.assembly-progress-section {
+    margin: 1.5rem 0;
+    padding: 1.5rem;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-lg);
+}
+
+.progress-bar-container {
+    width: 100%;
+    height: 8px;
+    background: var(--bg-quaternary);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-purple), var(--accent-blue));
+    border-radius: var(--radius-full);
+    transition: width 0.3s ease-in-out;
+}
+
+.progress-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+}
+
+.progress-percentage {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--accent-blue);
+}
+
+.progress-message {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+}
+
+/* Final Video Section */
+
+.final-video-section {
+    margin-top: 2rem;
+    padding: 2rem;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-lg);
+    border: 2px solid var(--accent-green);
+}
+
+.final-video-section h3 {
+    font-size: 1.5rem;
+    color: var(--accent-green);
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.video-container {
+    position: relative;
+    width: 100%;
+    background: #000;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+}
+
+.final-video-player {
+    width: 100%;
+    display: block;
+    max-height: 500px;
+}
+
+.final-video-actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.final-video-actions .btn {
+    flex: 1;
+    min-width: 200px;
+}
+
+/* Assembly Button Enhancement */
+
+.btn.btn-lg {
+    font-size: 1.1rem;
+    padding: 1rem 2rem;
+    font-weight: 600;
+}
+
+/* Responsive */
+
+@media (max-width: 768px) {
+    .progress-percentage {
+        font-size: 1.2rem;
+    }
+
+    .progress-message {
+        font-size: 0.85rem;
+    }
+
+    .final-video-actions {
+        flex-direction: column;
+    }
+
+    .final-video-actions .btn {
+        width: 100%;
+    }
+}

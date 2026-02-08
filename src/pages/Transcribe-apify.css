@@ -1,0 +1,25 @@
+/* Apify Info */
+.apify-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    background: rgba(59, 130, 246, 0.1);
+    border-left: 3px solid var(--accent-blue);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.apify-info svg {
+    color: var(--accent-blue);
+    flex-shrink: 0;
+}
+
+/* Transcript-specific styling for formatted output */
+.transcript-content pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    line-height: 1.8;
+}

@@ -1,0 +1,115 @@
+.notifications-container {
+    position: fixed;
+    top: calc(var(--header-height) + 1rem);
+    right: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    z-index: 1000;
+    max-width: 400px;
+    width: 100%;
+}
+
+.notification-toast {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    animation: slideIn 0.3s ease;
+}
+
+.notification-toast.success {
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+.notification-toast.success .notification-icon {
+    color: var(--accent-green);
+}
+
+.notification-toast.error {
+    border-color: rgba(255, 0, 80, 0.3);
+}
+
+.notification-toast.error .notification-icon {
+    color: var(--primary);
+}
+
+.notification-toast.warning {
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
+.notification-toast.warning .notification-icon {
+    color: var(--accent-orange);
+}
+
+.notification-toast.info {
+    border-color: rgba(0, 212, 255, 0.3);
+}
+
+.notification-toast.info .notification-icon {
+    color: var(--secondary);
+}
+
+.notification-icon {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.notification-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.notification-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.notification-message {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.notification-close {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+}
+
+.notification-close:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@media (max-width: 768px) {
+    .notifications-container {
+        left: 1rem;
+        right: 1rem;
+        max-width: none;
+    }
+}

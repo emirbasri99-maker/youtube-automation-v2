@@ -1,0 +1,212 @@
+/* Upgrade Modal Styles */
+
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 9998;
+    animation: fadeIn 0.2s;
+}
+
+.upgrade-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    z-index: 9999;
+    padding: 2.5rem;
+    animation: slideUp 0.3s;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -45%);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%);
+    }
+}
+
+.modal-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: #9ca3af;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.modal-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: #f3f4f6;
+}
+
+.modal-icon {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, rgba(244, 63, 94, 0.2), rgba(139, 92, 246, 0.2));
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #f43f5e;
+    margin: 0 auto 1.5rem;
+}
+
+.modal-title {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #f3f4f6;
+    text-align: center;
+    margin-bottom: 1rem;
+}
+
+.modal-description {
+    color: #d1d5db;
+    text-align: center;
+    margin-bottom: 2rem;
+    line-height: 1.6;
+}
+
+.modal-description strong {
+    color: #f43f5e;
+}
+
+.plan-comparison {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background: rgba(15, 23, 42, 0.4);
+    border-radius: 12px;
+}
+
+.plan-column {
+    flex: 1;
+    text-align: center;
+}
+
+.plan-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    background: rgba(255, 255, 255, 0.1);
+    color: #9ca3af;
+}
+
+.plan-badge.highlight {
+    background: linear-gradient(135deg, #f43f5e, #ec4899);
+    color: white;
+}
+
+.plan-column h3 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #f3f4f6;
+    margin-bottom: 0.5rem;
+}
+
+.plan-price {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0.25rem;
+    margin-bottom: 0.5rem;
+}
+
+.plan-price .price {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #f3f4f6;
+}
+
+.plan-price .period {
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+
+.plan-credits {
+    font-size: 0.875rem;
+    color: #10b981;
+    font-weight: 600;
+}
+
+.arrow-divider {
+    color: #f43f5e;
+    flex-shrink: 0;
+}
+
+.modal-features {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background: rgba(16, 185, 129, 0.05);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 12px;
+}
+
+.modal-features h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #f3f4f6;
+    margin-bottom: 1rem;
+}
+
+.modal-features ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.modal-features li {
+    padding: 0.5rem 0;
+    color: #d1d5db;
+    font-size: 0.95rem;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+.modal-actions .btn {
+    flex: 1;
+}
+
+@media (max-width: 640px) {
+    .plan-comparison {
+        flex-direction: column;
+    }
+
+    .arrow-divider {
+        transform: rotate(90deg);
+    }
+
+    .modal-actions {
+        flex-direction: column;
+    }
+}

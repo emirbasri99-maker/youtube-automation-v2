@@ -1,0 +1,172 @@
+/* Shorts-specific AI Model Selection */
+.model-selection-shorts {
+    margin-bottom: 1rem;
+}
+
+.model-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.model-btn {
+    flex: 1;
+    min-width: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    border: 2px solid transparent;
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+    cursor: pointer;
+}
+
+.model-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.model-btn.selected {
+    color: var(--text-primary);
+    background: rgba(255, 0, 80, 0.1);
+    border-color: var(--primary);
+}
+
+/* Optimized Concept for Shorts */
+.optimized-concept-shorts {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: var(--bg-tertiary);
+    border-left: 3px solid var(--secondary);
+    border-radius: var(--radius-md);
+}
+
+.optimized-concept-shorts h4 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+
+.optimized-concept-shorts h4 svg {
+    color: var(--secondary);
+}
+
+.concept-text {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+/* Voice Grid for Shorts */
+.voice-grid-shorts {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.voice-btn-shorts {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.875rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    border: 2px solid transparent;
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+    cursor: pointer;
+}
+
+.voice-btn-shorts:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+    transform: translateY(-2px);
+}
+
+.voice-btn-shorts.selected {
+    color: var(--text-primary);
+    background: rgba(0, 212, 255, 0.1);
+    border-color: var(--secondary);
+}
+
+.voice-btn-shorts svg:first-child {
+    flex-shrink: 0;
+}
+
+.voice-btn-shorts span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.loading-voices-shorts {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 2rem;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.btn-generate-voice {
+    width: 100%;
+    margin-top: 1rem;
+}
+
+/* Audio Player for Shorts */
+.audio-player-shorts {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+}
+
+.audio-header-shorts {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.audio-element-shorts {
+    width: 100%;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .model-buttons {
+        flex-direction: column;
+    }
+
+    .model-btn {
+        min-width: auto;
+    }
+
+    .voice-grid-shorts {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 480px) {
+    .voice-grid-shorts {
+        grid-template-columns: 1fr;
+    }
+}
