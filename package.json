@@ -5,7 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+<<<<<<< HEAD
     "build": "tsc && npx vite build",
+=======
+    "build": "vite build",
+>>>>>>> bb2c2dfc2050a4c5f1b8b610c0b9be4710d13718
     "preview": "vite preview"
   },
   "dependencies": {
