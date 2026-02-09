@@ -42,8 +42,10 @@ export const handler = async (event: any) => {
         });
 
         // Create Checkout Session
+        // Using 'payment' mode for one-time purchases
+        // TODO: Switch to 'subscription' mode when recurring prices are configured in Stripe
         const session = await stripe.checkout.sessions.create({
-            mode: 'subscription',
+            mode: 'payment',
             payment_method_types: ['card'],
             line_items: [
                 {
@@ -56,12 +58,6 @@ export const handler = async (event: any) => {
             metadata: {
                 userId,
                 planType,
-            },
-            subscription_data: {
-                metadata: {
-                    userId,
-                    planType,
-                },
             },
         });
 
