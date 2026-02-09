@@ -65,19 +65,35 @@ export const handler = async (event: any) => {
             },
         });
 
+        console.log('Stripe session created successfully:', session.id);
+
         // Return session ID
         return {
             statusCode: 200,
+            headers: {
+                'Content-Type': 'application/json',
+            },
             body: JSON.stringify({
                 sessionId: session.id,
             }),
         };
     } catch (error: any) {
         console.error('Checkout session creation error:', error);
+        console.error('Error details:', {
+            message: error.message,
+            type: error.type,
+            code: error.code,
+            statusCode: error.statusCode,
+        });
+
         return {
             statusCode: 500,
+            headers: {
+                'Content-Type': 'application/json',
+            },
             body: JSON.stringify({
                 message: error.message || 'Failed to create checkout session',
+                error: error.type || 'unknown_error',
             }),
         };
     }
