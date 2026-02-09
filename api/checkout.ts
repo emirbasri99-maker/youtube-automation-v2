@@ -2,29 +2,36 @@
 // Creates a Stripe Checkout session for subscription purchase
 
 import Stripe from 'stripe';
+import { Handler } from '@netlify/functions';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2026-01-28.clover',
+    apiVersion: '2024-12-18.acacia',
 });
 
-export default async function handler(req: any, res: any) {
+export const handler: Handler = async (event) => {
     // Only allow POST requests
-    if (req.method !== 'POST') {
-        return res.status(405).json({ message: 'Method not allowed' });
+    if (event.httpMethod !== 'POST') {
+        return {
+            statusCode: 405,
+            body: JSON.stringify({ message: 'Method not allowed' }),
+        };
     }
 
     try {
-        const { priceId, userId, planType } = req.body;
+        const { priceId, userId, planType } = JSON.parse(event.body || '{}');
 
         // Validate input
         if (!priceId || !userId || !planType) {
-            return res.status(400).json({
-                message: 'Missing required fields: priceId, userId, planType',
-            });
+            return {
+                statusCode: 400,
+                body: JSON.stringify({
+                    message: 'Missing required fields: priceId, userId, planType',
+                }),
+            };
         }
 
-        // Get user email from Supabase (optional, for better UX)
-        // For now, we'll let Stripe collect the email
+        // Get the site URL from Netlify environment or use default
+        const siteUrl = process.env.URL || 'https://youtubesiauto.netlify.app';
 
         // Create Checkout Session
         const session = await stripe.checkout.sessions.create({
@@ -36,8 +43,8 @@ export default async function handler(req: any, res: any) {
                     quantity: 1,
                 },
             ],
-            success_url: `${process.env.VITE_APP_URL || 'http://localhost:3000'}/app/dashboard?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${process.env.VITE_APP_URL || 'http://localhost:3000'}/app/settings?canceled=true`,
+            success_url: `${siteUrl}/app/dashboard?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${siteUrl}/?canceled=true`,
             metadata: {
                 userId,
                 planType,
@@ -51,13 +58,19 @@ export default async function handler(req: any, res: any) {
         });
 
         // Return session ID
-        return res.status(200).json({
-            sessionId: session.id,
-        });
+        return {
+            statusCode: 200,
+            body: JSON.stringify({
+                sessionId: session.id,
+            }),
+        };
     } catch (error: any) {
         console.error('Checkout session creation error:', error);
-        return res.status(500).json({
-            message: error.message || 'Failed to create checkout session',
-        });
+        return {
+            statusCode: 500,
+            body: JSON.stringify({
+                message: error.message || 'Failed to create checkout session',
+            }),
+        };
     }
-}
+};

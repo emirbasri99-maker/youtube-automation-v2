@@ -21,7 +21,7 @@ export async function createCheckoutSession(planType: PlanType, userId: string):
         const priceId = getStripePriceId(planType);
 
         // Call backend API to create checkout session
-        const response = await fetch('/api/checkout', {
+        const response = await fetch('/.netlify/functions/checkout', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
