@@ -2,13 +2,12 @@
 // Creates a Stripe Checkout session for subscription purchase
 
 import Stripe from 'stripe';
-import { Handler } from '@netlify/functions';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2024-12-18.acacia',
+    apiVersion: '2024-12-18.acacia' as any,
 });
 
-export const handler: Handler = async (event) => {
+export const handler = async (event: any) => {
     // Only allow POST requests
     if (event.httpMethod !== 'POST') {
         return {
@@ -20,8 +19,11 @@ export const handler: Handler = async (event) => {
     try {
         const { priceId, userId, planType } = JSON.parse(event.body || '{}');
 
+        console.log('Checkout request received:', { priceId, userId, planType });
+
         // Validate input
         if (!priceId || !userId || !planType) {
+            console.error('Missing required fields:', { priceId, userId, planType });
             return {
                 statusCode: 400,
                 body: JSON.stringify({
@@ -32,6 +34,12 @@ export const handler: Handler = async (event) => {
 
         // Get the site URL from Netlify environment or use default
         const siteUrl = process.env.URL || 'https://youtubesiauto.netlify.app';
+
+        console.log('Creating Stripe session with:', {
+            priceId,
+            siteUrl,
+            stripeKeyExists: !!process.env.STRIPE_SECRET_KEY
+        });
 
         // Create Checkout Session
         const session = await stripe.checkout.sessions.create({
