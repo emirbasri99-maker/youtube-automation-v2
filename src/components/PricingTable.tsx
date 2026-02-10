@@ -93,12 +93,20 @@ function PricingTable({ currentPlan }: PricingTableProps) {
     };
 
     const handleSignUpSuccess = async (userId: string) => {
-        // Wait a moment for auth state to update
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log('✅ PricingTable: Received userId from signup:', userId);
 
-        // Proceed to checkout with selected plan
         if (selectedPlan) {
-            await proceedToCheckout(selectedPlan);
+            try {
+                setLoading(selectedPlan);
+                setError(null);
+
+                // Create checkout session directly with userId
+                await createCheckoutSession(selectedPlan, userId);
+            } catch (err: any) {
+                console.error('Checkout error:', err);
+                setError(err.message || 'Failed to start checkout. Please try again.');
+                setLoading(null);
+            }
         }
     };
 
