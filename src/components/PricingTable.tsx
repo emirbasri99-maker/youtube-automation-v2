@@ -53,10 +53,9 @@ function PricingTable({ currentPlan }: PricingTableProps) {
     };
 
     const handleSelectPlan = async (planType: PlanType) => {
-        if (!user?.id) {
-            setError('Please log in to subscribe');
-            return;
-        }
+        // Allow checkout without login - user account will be created after payment
+        // If user is logged in, use their ID; otherwise use 'guest' and email will be captured in Stripe
+        const userId = user?.id || 'guest';
 
         if (currentPlan === planType) {
             return;
@@ -67,7 +66,7 @@ function PricingTable({ currentPlan }: PricingTableProps) {
             setError(null);
 
             // Create checkout session and redirect to Stripe
-            await createCheckoutSession(planType, user.id);
+            await createCheckoutSession(planType, userId);
         } catch (err: any) {
             console.error('Checkout error:', err);
             setError(err.message || 'Failed to start checkout. Please try again.');
