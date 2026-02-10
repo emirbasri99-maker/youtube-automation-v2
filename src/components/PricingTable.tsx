@@ -92,7 +92,7 @@ function PricingTable({ currentPlan }: PricingTableProps) {
         await proceedToCheckout(planType);
     };
 
-    const handleSignUpSuccess = async () => {
+    const handleSignUpSuccess = async (userId: string) => {
         // Wait a moment for auth state to update
         await new Promise(resolve => setTimeout(resolve, 1000));
 
