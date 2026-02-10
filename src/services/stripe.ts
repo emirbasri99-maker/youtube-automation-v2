@@ -54,33 +54,20 @@ export async function createCheckoutSession(planType: PlanType, userId: string):
         const data = await response.json();
         console.log('Checkout session response:', data);
 
-        const { sessionId } = data;
+        const { url, sessionId } = data;
 
-        if (!sessionId) {
-            throw new Error('No session ID received from server');
+        if (!url) {
+            throw new Error('No checkout URL received from server');
         }
 
+        console.log('Checkout URL:', url);
         console.log('Session ID:', sessionId);
 
-        // Redirect to Stripe Checkout
-        const stripe = await getStripe();
-        console.log('Stripe instance:', !!stripe);
-        console.log('Stripe publishable key:', STRIPE_CONFIG.publishableKey?.substring(0, 20) + '...');
+        // Direct redirect to Stripe Checkout (v8+ compatible)
+        // No need for Stripe.js instance, just redirect to the URL
+        console.log('Redirecting to Stripe checkout...');
+        window.location.href = url;
 
-        if (!stripe) {
-            throw new Error('Stripe failed to initialize. Check VITE_STRIPE_PUBLISHABLE_KEY environment variable.');
-        }
-
-        // Use the correct method for Stripe.js
-        console.log('Redirecting to Stripe checkout with sessionId:', sessionId);
-        const result = await stripe.redirectToCheckout({ sessionId });
-
-        console.log('Redirect result:', result);
-
-        if (result.error) {
-            console.error('Stripe redirect error:', result.error);
-            throw result.error;
-        }
     } catch (error) {
         console.error('Checkout error:', error);
         throw error;
