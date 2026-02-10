@@ -64,14 +64,16 @@ export const handler = async (event: any) => {
         });
 
         console.log('Stripe session created successfully:', session.id);
+        console.log('Checkout URL:', session.url);
 
-        // Return session ID
+        // Return checkout URL for direct redirect (Stripe.js v8+ compatibility)
         return {
             statusCode: 200,
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
+                url: session.url, // Return checkout URL instead of session ID
                 sessionId: session.id,
             }),
         };
