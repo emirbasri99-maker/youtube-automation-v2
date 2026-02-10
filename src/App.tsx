@@ -11,6 +11,7 @@ import Transcribe from './pages/Transcribe';
 import Settings from './pages/Settings';
 import Library from './pages/Library';
 import TrendAnalyzer from './pages/TrendAnalyzer';
+import PaymentSuccess from './pages/PaymentSuccess';
 
 function App() {
     return (
@@ -19,6 +20,7 @@ function App() {
                 <Routes>
                     {/* Public routes */}
                     <Route path="/" element={<LandingPage />} />
+                    <Route path="/auth/payment-success" element={<PaymentSuccess />} />
 
                     {/* Protected routes */}
                     <Route element={<ProtectedRoute />}>
