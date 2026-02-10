@@ -54,14 +54,15 @@ function PaymentSuccess() {
                     </>
                 )}
 
-                <>
-                    <CheckCircle size={64} className="status-icon success" />
-                    <h1 className="heading-lg">Payment Successful!</h1>
-                    <p className="text-lg">{message}</p>
-                    <p className="text-sm text-muted">
-                        Check your email for login instructions. Redirecting to home page...
-                    </p>
-                </>
+                {status === 'success' && (
+                    <>
+                        <CheckCircle size={64} className="status-icon success" />
+                        <h1 className="heading-lg">Payment Successful!</h1>
+                        <p className="text-lg">{message}</p>
+                        <p className="text-sm text-muted">
+                            Check your email for login instructions. Redirecting to home page...
+                        </p>
+                    </>
                 )}
 
                 {status === 'error' && (
