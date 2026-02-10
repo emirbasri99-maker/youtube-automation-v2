@@ -14,7 +14,7 @@ interface AuthContextType {
     loading: boolean;
     login: (email: string, password: string) => Promise<void>;
     logout: () => Promise<void>;
-    signUp: (email: string, password: string, fullName?: string) => Promise<void>;
+    signUp: (email: string, password: string, fullName?: string) => Promise<{ userId: string; email: string } | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -90,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: string,
         password: string,
         fullName?: string
-    ): Promise<void> => {
+    ): Promise<{ userId: string; email: string } | null> => {
         try {
             const { data, error } = await supabase.auth.signUp({
                 email,
@@ -117,12 +117,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     console.log('✅ Session created, user logged in');
                     setUser(mapSupabaseUser(data.user));
                     setIsAuthenticated(true);
+
+                    // Return user data immediately
+                    return {
+                        userId: data.user.id,
+                        email: data.user.email || email,
+                    };
                 } else {
                     // Email confirmation required
                     console.warn('⚠️ Email confirmation required');
                     throw new Error('Lütfen email adresinizi onaylayın. Gelen kutunuzu kontrol edin.');
                 }
             }
+
+            return null;
         } catch (error) {
             console.error('Sign up error:', error);
             throw new Error(

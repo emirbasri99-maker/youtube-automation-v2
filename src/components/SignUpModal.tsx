@@ -34,10 +34,16 @@ function SignUpModal({ isOpen, onClose, selectedPlan, onSignUpSuccess }: SignUpM
             setLoading(true);
 
             // Sign up with Supabase
-            await signUp(email, password);
+            const userData = await signUp(email, password, name);
 
-            // Success - close modal and proceed to payment
-            onSignUpSuccess();
+            if (!userData) {
+                throw new Error('Failed to create user account');
+            }
+
+            console.log('✅ SignUpModal: User data received:', userData.userId);
+
+            // Success - close modal and proceed to payment with userId
+            onSignUpSuccess(userData.userId);
             onClose();
         } catch (err: any) {
             console.error('Signup error:', err);
