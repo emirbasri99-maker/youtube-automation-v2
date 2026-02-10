@@ -8,7 +8,7 @@ interface SignUpModalProps {
     isOpen: boolean;
     onClose: () => void;
     selectedPlan: PlanType;
-    onSignUpSuccess: () => void;
+    onSignUpSuccess: (userId: string) => void;
 }
 
 function SignUpModal({ isOpen, onClose, selectedPlan, onSignUpSuccess }: SignUpModalProps) {
