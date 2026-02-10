@@ -55,7 +55,7 @@ export const handler = async (event: any) => {
             ],
             // Collect customer email for guest users
             customer_email: userId === 'guest' ? undefined : undefined, // Stripe will always ask for email
-            success_url: `${siteUrl}/app/dashboard?session_id={CHECKOUT_SESSION_ID}&payment_success=true`,
+            success_url: `${siteUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}&userId=${userId}`,
             cancel_url: `${siteUrl}/?canceled=true`,
             metadata: {
                 userId,

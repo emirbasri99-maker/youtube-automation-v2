@@ -20,6 +20,7 @@ function App() {
                 <Routes>
                     {/* Public routes */}
                     <Route path="/" element={<LandingPage />} />
+                    <Route path="/payment-success" element={<PaymentSuccess />} />
                     <Route path="/auth/payment-success" element={<PaymentSuccess />} />
 
                     {/* Protected routes */}

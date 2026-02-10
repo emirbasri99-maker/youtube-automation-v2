@@ -1,47 +1,60 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 import './PaymentSuccess.css';
 
 function PaymentSuccess() {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const { user } = useAuth();
     const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
     const [message, setMessage] = useState('Processing your payment...');
 
     useEffect(() => {
         const sessionId = searchParams.get('session_id');
+        const userId = searchParams.get('userId');
 
-        if (!sessionId) {
+        if (!sessionId || !userId) {
             setStatus('error');
             setMessage('Invalid payment session');
             return;
         }
 
-        // Verify payment session
-        const verifyPayment = async () => {
+        const handlePaymentSuccess = async () => {
             try {
-                // Wait a moment for webhook to process
+                // Wait for webhook to process payment and add credits (2 seconds)
                 await new Promise(resolve => setTimeout(resolve, 2000));
 
-                setStatus('success');
-                setMessage('Payment successful! Your credits have been added to your account.');
+                // Check if user already has an active session
+                const { data: { session } } = await supabase.auth.getSession();
 
-                // Redirect to landing page with success message after 3 seconds
-                setTimeout(() => {
-                    navigate('/?payment_success=true');
-                }, 3000);
+                if (session && session.user.id === userId) {
+                    // User is already logged in with correct account
+                    console.log('✅ User already logged in, redirecting to dashboard');
+                    setStatus('success');
+                    setMessage('Payment successful! Your credits have been added.');
+
+                    setTimeout(() => {
+                        navigate('/app/dashboard');
+                    }, 1500);
+                } else {
+                    // User not logged in or different account - show success message
+                    setStatus('success');
+                    setMessage('Payment successful! Your credits have been added. Please log in to access your dashboard.');
+
+                    setTimeout(() => {
+                        navigate('/');
+                    }, 3000);
+                }
             } catch (error) {
-                console.error('Payment verification error:', error);
+                console.error('Payment success handler error:', error);
                 setStatus('error');
-                setMessage('Payment verification failed. Please contact support.');
+                setMessage('Payment was successful but there was an issue. Please contact support.');
             }
         };
 
-        verifyPayment();
-    }, [searchParams, navigate, user]);
+        handlePaymentSuccess();
+    }, [searchParams, navigate]);
 
     return (
         <div className="payment-success-container">
@@ -60,7 +73,7 @@ function PaymentSuccess() {
                         <h1 className="heading-lg">Payment Successful!</h1>
                         <p className="text-lg">{message}</p>
                         <p className="text-sm text-muted">
-                            Check your email for login instructions. Redirecting to home page...
+                            Redirecting you to dashboard...
                         </p>
                     </>
                 )}
