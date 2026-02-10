@@ -29,13 +29,9 @@ function PaymentSuccess() {
                 setStatus('success');
                 setMessage('Payment successful! Your credits have been added to your account.');
 
-                // Redirect to dashboard after 3 seconds
+                // Redirect to landing page with success message after 3 seconds
                 setTimeout(() => {
-                    if (user) {
-                        navigate('/app/dashboard');
-                    } else {
-                        navigate('/auth/login?payment_success=true');
-                    }
+                    navigate('/?payment_success=true');
                 }, 3000);
             } catch (error) {
                 console.error('Payment verification error:', error);
@@ -58,15 +54,14 @@ function PaymentSuccess() {
                     </>
                 )}
 
-                {status === 'success' && (
-                    <>
-                        <CheckCircle size={64} className="status-icon success" />
-                        <h1 className="heading-lg">Payment Successful!</h1>
-                        <p className="text-lg">{message}</p>
-                        <p className="text-sm text-muted">
-                            Redirecting you to {user ? 'dashboard' : 'login'}...
-                        </p>
-                    </>
+                <>
+                    <CheckCircle size={64} className="status-icon success" />
+                    <h1 className="heading-lg">Payment Successful!</h1>
+                    <p className="text-lg">{message}</p>
+                    <p className="text-sm text-muted">
+                        Check your email for login instructions. Redirecting to home page...
+                    </p>
+                </>
                 )}
 
                 {status === 'error' && (
