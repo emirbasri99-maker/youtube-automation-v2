@@ -3,6 +3,7 @@ import { Check, Zap, Crown, Sparkles, Loader2, Rocket } from 'lucide-react';
 import { getAllPlans, PlanType } from '../config/plans';
 import { createCheckoutSession } from '../services/stripe';
 import { useAuth } from '../context/AuthContext';
+import SignUpModal from './SignUpModal';
 import './PricingTable.css';
 
 interface PricingTableProps {
@@ -12,6 +13,8 @@ interface PricingTableProps {
 function PricingTable({ currentPlan }: PricingTableProps) {
     const plans = getAllPlans();
     const { user } = useAuth();
+    const [showSignUpModal, setShowSignUpModal] = useState(false);
+    const [selectedPlan, setSelectedPlan] = useState<PlanType | null>(null);
     const [loading, setLoading] = useState<PlanType | null>(null);
     const [error, setError] = useState<string | null>(null);
 
@@ -52,12 +55,10 @@ function PricingTable({ currentPlan }: PricingTableProps) {
         return features;
     };
 
-    const handleSelectPlan = async (planType: PlanType) => {
-        // Allow checkout without login - user account will be created after payment
-        // If user is logged in, use their ID; otherwise use 'guest' and email will be captured in Stripe
-        const userId = user?.id || 'guest';
-
-        if (currentPlan === planType) {
+    const proceedToCheckout = async (planType: PlanType) => {
+        if (!user?.id) {
+            console.error('No user found after signup');
+            setError('Please refresh and try again');
             return;
         }
 
@@ -66,11 +67,38 @@ function PricingTable({ currentPlan }: PricingTableProps) {
             setError(null);
 
             // Create checkout session and redirect to Stripe
-            await createCheckoutSession(planType, userId);
+            await createCheckoutSession(planType, user.id);
         } catch (err: any) {
             console.error('Checkout error:', err);
             setError(err.message || 'Failed to start checkout. Please try again.');
             setLoading(null);
+        }
+    };
+
+    const handleSelectPlan = async (planType: PlanType) => {
+        if (currentPlan === planType) {
+            return;
+        }
+
+        setSelectedPlan(planType);
+
+        // If user is not logged in, show signup modal
+        if (!user) {
+            setShowSignUpModal(true);
+            return;
+        }
+
+        // User is logged in, proceed to checkout
+        await proceedToCheckout(planType);
+    };
+
+    const handleSignUpSuccess = async () => {
+        // Wait a moment for auth state to update
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Proceed to checkout with selected plan
+        if (selectedPlan) {
+            await proceedToCheckout(selectedPlan);
         }
     };
 
@@ -147,6 +175,15 @@ function PricingTable({ currentPlan }: PricingTableProps) {
                     All plans include: AI-powered video generation, trend analysis, and 24/7 support
                 </p>
             </div>
+
+            {selectedPlan && (
+                <SignUpModal
+                    isOpen={showSignUpModal}
+                    onClose={() => setShowSignUpModal(false)}
+                    selectedPlan={selectedPlan}
+                    onSignUpSuccess={handleSignUpSuccess}
+                />
+            )}
         </div>
     );
 }
