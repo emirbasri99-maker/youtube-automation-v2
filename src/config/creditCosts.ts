@@ -3,10 +3,10 @@
 
 export const CREDIT_COSTS = {
     // Shorts Production
-    SHORTS_PER_SCENE: 100,
+    SHORTS_PER_SCENE: 1200,
 
     // Long Video Production
-    LONG_VIDEO_PER_MINUTE: 250,
+    LONG_VIDEO_PER_MINUTE: 500,
 
     // AI Model Costs (additional to base cost)
     AI_MODEL: {

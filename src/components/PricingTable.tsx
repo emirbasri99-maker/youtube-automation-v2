@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Check, Zap, Crown, Sparkles, Loader2, Rocket } from 'lucide-react';
 import { getAllPlans, PlanType } from '../config/plans';
 import { createCheckoutSession } from '../services/stripe';
-import { useAuth } from '../context/AuthContext';
 import SignUpModal from './SignUpModal';
 import './PricingTable.css';
 
@@ -12,7 +11,7 @@ interface PricingTableProps {
 
 function PricingTable({ currentPlan }: PricingTableProps) {
     const plans = getAllPlans();
-    const { user } = useAuth();
+    // Note: user auth state is handled inside SignUpModal directly
     const [showSignUpModal, setShowSignUpModal] = useState(false);
     const [selectedPlan, setSelectedPlan] = useState<PlanType | null>(null);
     const [loading, setLoading] = useState<PlanType | null>(null);
@@ -55,41 +54,14 @@ function PricingTable({ currentPlan }: PricingTableProps) {
         return features;
     };
 
-    const proceedToCheckout = async (planType: PlanType) => {
-        if (!user?.id) {
-            console.error('No user found after signup');
-            setError('Please refresh and try again');
-            return;
-        }
-
-        try {
-            setLoading(planType);
-            setError(null);
-
-            // Create checkout session and redirect to Stripe
-            await createCheckoutSession(planType, user.id);
-        } catch (err: any) {
-            console.error('Checkout error:', err);
-            setError(err.message || 'Failed to start checkout. Please try again.');
-            setLoading(null);
-        }
-    };
-
     const handleSelectPlan = async (planType: PlanType) => {
         if (currentPlan === planType) {
             return;
         }
 
         setSelectedPlan(planType);
-
-        // If user is not logged in, show signup modal
-        if (!user) {
-            setShowSignUpModal(true);
-            return;
-        }
-
-        // User is logged in, proceed to checkout
-        await proceedToCheckout(planType);
+        // Always show signup modal — it handles both new users (signup) and existing users (confirm payment)
+        setShowSignUpModal(true);
     };
 
     const handleSignUpSuccess = async (userId: string) => {

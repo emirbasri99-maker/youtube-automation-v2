@@ -38,7 +38,9 @@ export interface ShortsProgress {
  */
 export async function generateShortsScript(
     topic: string,
-    sceneCount: number = 6
+    sceneCount: number = 6,
+    durationMode: 'auto' | 'manual' = 'auto',
+    manualDuration: number = 10
 ): Promise<SceneScript[]> {
     const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 
@@ -46,30 +48,34 @@ export async function generateShortsScript(
         throw new Error('OpenAI API key not found');
     }
 
-    const systemPrompt = `Sen profesyonel bir YouTube Shorts görüntü yönetmenisin. Kullanıcının verdiği konuyu ${sceneCount} görsel sahneye böleceksin.
+    const durationInstruction = durationMode === 'manual'
+        ? `EVERY SCENE MUST BE EXACTLY ${manualDuration} SECONDS LONG.`
+        : `Each scene should be between 5-15 seconds.`;
 
-KRİTİK KURALLAR:
-1. Her sahne 8-15 saniye video için uygun olmalı
-2. Sahneler birbiriyle görsel tutarlılığa sahip olmalı
-3. Her sahne için ÇOK DETAYLI görsel prompt yaz
-4. Karakter varsa, her sahnede AYNI özellikleri kullan (saç rengi, kıyafet vb.)
-5. Işıklandırma ve atmosfer tutarlı olmalı
+    const systemPrompt = `You are a professional YouTube Shorts cinematographer. You will break down the user's topic into ${sceneCount} visual scenes.
 
-ÇIKTI FORMATI (Kesin JSON):
+CRITICAL RULES:
+1. ${durationInstruction}
+2. Scenes must have visual consistency with each other
+3. Write VERY DETAILED image prompts for each scene
+4. If there is a character, use the SAME features in every scene (hair color, clothes, etc.)
+5. Lighting and atmosphere must be consistent
+
+OUTPUT FORMAT (Strict JSON):
 {
-  "masterStyle": "Tüm sahneler için ortak görsel stil (örn: cinematic, 4k, dramatic lighting)",
-  "characterDesc": "Ana karakter özellikleri (varsa)",
+  "masterStyle": "Common visual style for all scenes (e.g., cinematic, 4k, dramatic lighting)",
+  "characterDesc": "Main character features (if any)",
   "scenes": [
     {
       "sceneNumber": 1,
-      "description": "Bu sahnede ne oluyor (Türkçe açıklama)",
-      "imagePrompt": "DETAYLI İNGİLİZCE görsel prompt. masterStyle + characterDesc dahil. Kamera açısı, ışık, renk tonu belirt.",
-      "duration": 10
+      "description": "What happens in this scene (Turkish description)",
+      "imagePrompt": "DETAILED ENGLISH visual prompt. Include masterStyle + characterDesc. Specify camera angle, lighting, color tone.",
+      "duration": ${durationMode === 'manual' ? manualDuration : 10}
     }
   ]
 }
 
-ÖNEMLİ: imagePrompt İNGİLİZCE olmalı çünkü AI görsel modeli İngilizce anlıyor!`;
+IMPORTANT: imagePrompt MUST be in ENGLISH because the AI image model understands English!`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -81,7 +87,7 @@ KRİTİK KURALLAR:
             model: 'gpt-4o',
             messages: [
                 { role: 'system', content: systemPrompt },
-                { role: 'user', content: `Konu: ${topic}\n\n${sceneCount} sahnelik shorts senaryosu oluştur.` }
+                { role: 'user', content: `Topic: ${topic}\n\nCreate a ${sceneCount}-scene shorts script.` }
             ],
             temperature: 0.8,
             max_tokens: 2000,
@@ -112,7 +118,7 @@ KRİTİK KURALLAR:
         sceneNumber: scene.sceneNumber,
         description: scene.description,
         imagePrompt: `${scene.imagePrompt}. ${masterStyle}${characterDesc ? `, ${characterDesc}` : ''}`,
-        duration: Math.min(15, Math.max(8, scene.duration || 10)),
+        duration: durationMode === 'manual' ? manualDuration : Math.min(15, Math.max(5, scene.duration || 10)),
     }));
 }
 
@@ -312,7 +318,9 @@ export async function processAllScenes(
  */
 export function parseManualScript(
     scriptText: string,
-    sceneCount: number = 6
+    sceneCount: number = 6,
+    durationMode: 'auto' | 'manual' = 'auto',
+    manualDuration: number = 10
 ): SceneScript[] {
     // Split by "Sahne" or numbers or double newlines
     const sections = scriptText
@@ -330,7 +338,7 @@ export function parseManualScript(
             sceneNumber: i + 1,
             description: text,
             imagePrompt: `${text}. cinematic photography, 9:16 vertical format, professional, 4k, dramatic lighting, vibrant colors`,
-            duration: Math.floor(Math.random() * 8) + 8, // Random 8-15s
+            duration: durationMode === 'manual' ? manualDuration : Math.floor(Math.random() * 6) + 5, // Random 5-10s for auto
         });
     }
 
@@ -340,7 +348,7 @@ export function parseManualScript(
             sceneNumber: scenes.length + 1,
             description: 'Abstract visual',
             imagePrompt: 'Abstract cinematic background, professional, 4k, dramatic lighting, 9:16 vertical format',
-            duration: 10,
+            duration: durationMode === 'manual' ? manualDuration : 5,
         });
     }
 

@@ -119,8 +119,8 @@ function LandingPage() {
                             <Youtube size={28} />
                         </div>
                         <div className="logo-text">
-                            <span className="logo-title">YouTube</span>
-                            <span className="logo-subtitle">Automation</span>
+                            <span className="logo-title">IntelliTube</span>
+                            <span className="logo-subtitle">AI</span>
                         </div>
                     </div>
 
@@ -158,9 +158,6 @@ function LandingPage() {
                         <button className="btn btn-primary btn-lg" onClick={() => setShowSignUpModal(true)}>
                             Subscribe Now
                             <ArrowRight size={20} />
-                        </button>
-                        <button className="btn btn-secondary btn-lg">
-                            Demo İzle
                         </button>
                     </div>
 
@@ -208,7 +205,7 @@ function LandingPage() {
                 <div className="section-container">
                     <div className="benefits-content">
                         <div className="benefits-text">
-                            <h2>Why YouTube Automation?</h2>
+                            <h2>Why IntelliTube AI?</h2>
                             <p>Speed up your video production process and improve quality</p>
 
                             <ul className="benefits-list">
@@ -221,7 +218,7 @@ function LandingPage() {
                             </ul>
 
                             <button className="btn btn-primary" onClick={() => setShowSignUpModal(true)}>
-                                Hemen Başla
+                                Start Now
                                 <ArrowRight size={18} />
                             </button>
                         </div>
@@ -239,7 +236,7 @@ function LandingPage() {
 
             {/* Pricing Section */}
             <section className="pricing-section-wrapper" id="pricing">
-                <PricingTable onSelectPlan={() => setShowLoginModal(true)} />
+                <PricingTable />
             </section>
 
             {/* CTA Section */}

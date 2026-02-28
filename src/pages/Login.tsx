@@ -23,7 +23,7 @@ function Login() {
             await login(email, password);
             navigate('/');
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Giriş başarısız');
+            setError(err instanceof Error ? err.message : 'Login failed');
         } finally {
             setIsLoading(false);
         }
@@ -37,8 +37,8 @@ function Login() {
                         <div className="logo-circle">
                             <LogIn size={32} />
                         </div>
-                        <h1>YouTube Automation</h1>
-                        <p>Hesabınıza giriş yapın</p>
+                        <h1>IntelliTube AI</h1>
+                        <p>Sign in to your account</p>
                     </div>
 
                     <form onSubmit={handleSubmit} className="login-form">
@@ -60,7 +60,7 @@ function Login() {
                         <div className="form-group">
                             <label htmlFor="password">
                                 <Lock size={18} />
-                                Şifre
+                                Password
                             </label>
                             <div className="password-input">
                                 <input
@@ -92,14 +92,13 @@ function Login() {
                             className="login-button"
                             disabled={isLoading}
                         >
-                            {isLoading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
+                            {isLoading ? 'Signing in...' : 'Sign In'}
                         </button>
                     </form>
 
                     <div className="demo-credentials">
-                        <p>Demo Hesap:</p>
-                        <p><strong>Email:</strong> demo@youtube.com</p>
-                        <p><strong>Şifre:</strong> demo123</p>
+                        <p><strong>Email:</strong> demo@intellitube.ai</p>
+                        <p><strong>Password:</strong> demo123</p>
                     </div>
                 </div>
             </div>

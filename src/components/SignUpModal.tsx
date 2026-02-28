@@ -12,7 +12,8 @@ interface SignUpModalProps {
 }
 
 function SignUpModal({ isOpen, onClose, selectedPlan, onSignUpSuccess }: SignUpModalProps) {
-    const { signUp } = useAuth();
+    const { signUp, login } = useAuth();
+    const [mode, setMode] = useState<'signup' | 'login'>('signup');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [name, setName] = useState('');
@@ -21,7 +22,7 @@ function SignUpModal({ isOpen, onClose, selectedPlan, onSignUpSuccess }: SignUpM
 
     if (!isOpen) return null;
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSignUp = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
 
@@ -32,22 +33,39 @@ function SignUpModal({ isOpen, onClose, selectedPlan, onSignUpSuccess }: SignUpM
 
         try {
             setLoading(true);
-
-            // Sign up with Supabase
             const userData = await signUp(email, password, name);
-
-            if (!userData) {
-                throw new Error('Failed to create user account');
-            }
-
-            console.log('✅ SignUpModal: User data received:', userData.userId);
-
-            // Success - close modal and proceed to payment with userId
+            if (!userData) throw new Error('Failed to create user account');
             onSignUpSuccess(userData.userId);
             onClose();
         } catch (err: any) {
-            console.error('Signup error:', err);
             setError(err.message || 'Failed to create account. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError(null);
+
+        if (!email || !password) {
+            setError('Please enter your email and password');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            await login(email, password);
+            // Get the user ID from AuthContext after login
+            // We need to wait a tick for state to update, so use a small hack
+            // Actually login doesn't return userId, so we re-read from supabase
+            const { supabase } = await import('../lib/supabase');
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Login failed');
+            onSignUpSuccess(user.id);
+            onClose();
+        } catch (err: any) {
+            setError(err.message || 'Login failed. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -61,33 +79,57 @@ function SignUpModal({ isOpen, onClose, selectedPlan, onSignUpSuccess }: SignUpM
                 </button>
 
                 <div className="modal-header">
-                    <h2 className="heading-lg">Create Your Account</h2>
+                    <h2 className="heading-lg">
+                        {mode === 'signup' ? 'Create Your Account' : 'Sign In'}
+                    </h2>
                     <p className="text-muted">
-                        Sign up to continue with your {selectedPlan} plan
+                        Continue with the <strong>{selectedPlan}</strong> plan
                     </p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="signup-form">
+                {/* Tab switcher */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                    <button
+                        type="button"
+                        className={`btn ${mode === 'signup' ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{ flex: 1, padding: '8px 0' }}
+                        onClick={() => { setMode('signup'); setError(null); }}
+                    >
+                        New Account
+                    </button>
+                    <button
+                        type="button"
+                        className={`btn ${mode === 'login' ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{ flex: 1, padding: '8px 0' }}
+                        onClick={() => { setMode('login'); setError(null); }}
+                    >
+                        Sign In
+                    </button>
+                </div>
+
+                <form onSubmit={mode === 'signup' ? handleSignUp : handleLogin} className="signup-form">
                     {error && (
                         <div className="error-banner">
                             <p>{error}</p>
                         </div>
                     )}
 
-                    <div className="form-group">
-                        <label htmlFor="name" className="form-label">
-                            <User size={18} />
-                            Full Name (Optional)
-                        </label>
-                        <input
-                            type="text"
-                            id="name"
-                            className="form-input"
-                            placeholder="John Doe"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                        />
-                    </div>
+                    {mode === 'signup' && (
+                        <div className="form-group">
+                            <label htmlFor="name" className="form-label">
+                                <User size={18} />
+                                Full Name (Optional)
+                            </label>
+                            <input
+                                type="text"
+                                id="name"
+                                className="form-input"
+                                placeholder="John Doe"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                            />
+                        </div>
+                    )}
 
                     <div className="form-group">
                         <label htmlFor="email" className="form-label">
@@ -114,11 +156,11 @@ function SignUpModal({ isOpen, onClose, selectedPlan, onSignUpSuccess }: SignUpM
                             type="password"
                             id="password"
                             className="form-input"
-                            placeholder="Min 6 characters"
+                            placeholder={mode === 'signup' ? 'Min 6 characters' : 'Your password'}
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             required
-                            minLength={6}
+                            minLength={mode === 'signup' ? 6 : 1}
                         />
                     </div>
 
@@ -128,17 +170,16 @@ function SignUpModal({ isOpen, onClose, selectedPlan, onSignUpSuccess }: SignUpM
                         disabled={loading}
                     >
                         {loading ? (
-                            <>
-                                <Loader2 size={18} className="spinner" />
-                                Creating Account...
-                            </>
+                            <><Loader2 size={18} className="spinner" /> İşleniyor...</>
+                        ) : mode === 'signup' ? (
+                            'Create Account & Continue to Payment →'
                         ) : (
-                            'Create Account & Continue to Payment'
+                            'Sign In & Continue to Payment →'
                         )}
                     </button>
 
                     <p className="text-sm text-muted text-center">
-                        By creating an account, you agree to our Terms of Service
+                        By creating an account, you agree to our Terms of Service.
                     </p>
                 </form>
             </div>

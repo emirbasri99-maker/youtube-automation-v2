@@ -31,53 +31,62 @@ export interface TrendAnalysisResult {
 /**
  * Search YouTube for trending videos using Apify (via proxy)
  */
+import { startActorRun, waitForRun, getActorRunResults } from './apify';
+
+/**
+ * Search YouTube for trending videos using Apify (via proxy)
+ */
 export async function searchYouTubeTrends(
     keyword: string,
     onProgress?: (status: string) => void
 ): Promise<YouTubeVideo[]> {
-    const PROXY_URL = 'http://localhost:3001/api/apify/trends';
-
-    if (onProgress) onProgress('YouTube trendleri aranıyor...');
+    if (onProgress) onProgress('YouTube trendleri taranıyor...');
 
     try {
-        const response = await fetch(PROXY_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ keyword }),
-        });
+        // Use Streamers YouTube Scraper (verified working actor)
+        const ACTOR_ID = 'streamers/youtube-scraper';
 
-        if (!response.ok) {
-            throw new Error('Proxy server error');
-        }
+        // Correct input format for streamers/youtube-scraper
+        const input = {
+            searchTerm: keyword, // Use searchTerm, not searchKeywords
+            maxVideos: 10,
+            type: 'video', // video, shorts, or stream
+        };
 
-        const data = await response.json();
+        const runId = await startActorRun(input, ACTOR_ID);
 
-        if (!data.success || !data.videos || data.videos.length === 0) {
+        if (onProgress) onProgress('Sonuçlar toplanıyor...');
+
+        await waitForRun(runId);
+
+        if (onProgress) onProgress('Veriler alınıyor...');
+
+        const results = await getActorRunResults(runId);
+
+        if (!results || results.length === 0) {
             throw new Error('No videos found');
         }
 
         if (onProgress) onProgress('Sonuçlar işleniyor...');
 
         // Transform to our format
-        const videos: YouTubeVideo[] = data.videos.map((item: any) => ({
-            id: item.id || '',
+        const videos: YouTubeVideo[] = results.map((item: any) => ({
+            id: item.videoCode || item.id || '',
             title: item.title || 'Untitled',
-            url: item.url || `https://youtube.com/watch?v=${item.id}`,
-            // Use actual thumbnail from API, fallback to YouTube CDN
-            thumbnail: item.thumbnailUrl || item.thumbnail || `https://img.youtube.com/vi/${item.id}/hqdefault.jpg`,
+            url: item.videoUrl || item.url || `https://youtube.com/watch?v=${item.id}`,
+            thumbnail: item.thumbnailUrl || `https://img.youtube.com/vi/${item.videoCode || item.id}/hqdefault.jpg`,
             views: item.viewCount || 0,
             channelName: item.channelName || 'Unknown',
             channelUrl: item.channelUrl || '',
             publishedAt: item.date || new Date().toISOString(),
-            tags: [],
+            tags: item.tags || [],
             description: item.description || '',
-        }));
+        })).filter(v => v.id && v.title !== 'Untitled'); // Filter out bad results
 
         return videos;
 
     } catch (error) {
-        // If proxy server is not running or fails, use mock data
-        console.warn('⚠️ Proxy server error, using mock data:', error);
+        console.warn('⚠️ Apify error, using mock data:', error);
         if (onProgress) onProgress('Demo modu - örnek veriler yükleniyor...');
         return generateMockVideos(keyword);
     }

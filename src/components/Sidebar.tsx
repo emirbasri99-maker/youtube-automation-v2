@@ -50,8 +50,8 @@ function Sidebar() {
                         <Youtube size={28} />
                     </div>
                     <div className="logo-text">
-                        <span className="logo-title">YouTube</span>
-                        <span className="logo-subtitle">Automation</span>
+                        <span className="logo-title">IntelliTube</span>
+                        <span className="logo-subtitle">AI</span>
                     </div>
                 </div>
             </div>
@@ -88,7 +88,7 @@ function Sidebar() {
 
             <nav className="sidebar-nav">
                 <div className="nav-section">
-                    <span className="nav-section-title">Ana Menü</span>
+                    <span className="nav-section-title">Main Menu</span>
                     <ul className="nav-list">
                         {navItems.map((item) => (
                             <li key={item.path}>
@@ -108,15 +108,15 @@ function Sidebar() {
                 </div>
 
                 <div className="nav-section">
-                    <span className="nav-section-title">Hızlı Erişim</span>
+                    <span className="nav-section-title">Quick Access</span>
                     <div className="quick-actions">
                         <button className="quick-action-btn">
                             <Sparkles size={18} />
-                            <span>AI Video Önerisi</span>
+                            <span>AI Video Suggestion</span>
                         </button>
                         <button className="quick-action-btn logout-btn" onClick={logout}>
                             <LogOut size={18} />
-                            <span>Çıkış Yap</span>
+                            <span>Sign Out</span>
                         </button>
                     </div>
                 </div>
@@ -127,10 +127,10 @@ function Sidebar() {
                     <div className="upgrade-card">
                         <Crown size={24} className="upgrade-icon" />
                         <div className="upgrade-content">
-                            <h4>Pro'ya Yükselt</h4>
-                            <p>Sınırsız video oluştur</p>
+                            <h4>Upgrade to Pro</h4>
+                            <p>Create unlimited videos</p>
                         </div>
-                        <button className="btn btn-primary btn-sm">Yükselt</button>
+                        <button className="btn btn-primary btn-sm">Upgrade</button>
                     </div>
                 )}
             </div>

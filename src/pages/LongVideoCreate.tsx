@@ -1,38 +1,38 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     FileText,
     Mic,
     Film,
-    Upload,
     Check,
     ArrowRight,
     ArrowLeft,
     Sparkles,
     Volume2,
     Image,
-    Music,
-    Youtube,
     Clock,
     AlertCircle,
     RefreshCw,
     Download,
+    Play,
+    Search,
 } from 'lucide-react';
-import { getVoices, textToSpeech, downloadAudio, estimateAudioDuration, type ElevenLabsVoice } from '../services/elevenlabs';
+import { getPollyVoices, synthesizeSpeech, previewVoice, downloadAudio, estimateAudioDuration, type LanguageGroup, type PollyVoice } from '../services/awsPolly';
 import { generateScriptWithProgress, MODEL_CONFIGS, type ModelTier } from '../services/openai';
 import { parseScriptIntoScenes, findVideosForAllScenes, type SelectedSceneVideo } from '../services/pexels';
 import { assembleVideo, downloadVideo, type AssemblyProgress } from '../services/videoAssembly';
 import { generateImagesForScenes, type SceneImageData } from '../services/falai';
 import { assembleVideoFromImages } from '../services/imageToVideoAssembly';
 import { useApp } from '../context/AppContext';
+import { saveVideo, uploadVideo } from '../services/videoLibrary';
+import { supabase } from '../lib/supabase';
 import './LongVideoCreate.css';
 
-type Step = 'script' | 'voiceover' | 'assembly' | 'publish';
+type Step = 'script' | 'voiceover' | 'assembly';
 
 const steps: { id: Step; title: string; icon: React.ElementType }[] = [
     { id: 'script', title: 'Write Script', icon: FileText },
     { id: 'voiceover', title: 'Voiceover', icon: Mic },
     { id: 'assembly', title: 'Video Editing', icon: Film },
-    { id: 'publish', title: 'Publish', icon: Upload },
 ];
 
 function LongVideoCreate() {
@@ -45,24 +45,28 @@ function LongVideoCreate() {
     const [script, setScript] = useState('');
     const [optimizedConcept, setOptimizedConcept] = useState('');
     const [duration, setDuration] = useState(10);
-    const [selectedVoice, setSelectedVoice] = useState('');
+    const [selectedVoice, setSelectedVoice] = useState('en-US-GuyNeural');
     const [speed, setSpeed] = useState(1);
-    const [title, setTitle] = useState('');
-    const [description, setDescription] = useState('');
-    const [tags, setTags] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [selectedModel, setSelectedModel] = useState<ModelTier>('standard');
     const [generationStage, setGenerationStage] = useState<'concept' | 'script' | null>(null);
 
-    // ElevenLabs states
-    const [voices, setVoices] = useState<ElevenLabsVoice[]>([]);
+    // AWS Polly states
+    const [languages, setLanguages] = useState<LanguageGroup[]>([]);
+    const [selectedLanguage, setSelectedLanguage] = useState('en-US');
+    const [filteredVoices, setFilteredVoices] = useState<PollyVoice[]>([]);
+    const [selectedVoiceId, setSelectedVoiceId] = useState('Ruth');
     const [isLoadingVoices, setIsLoadingVoices] = useState(false);
+    const [languageSearch, setLanguageSearch] = useState('');
+    const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
     const [audioUrl, setAudioUrl] = useState<string | null>(null);
     const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
     const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+    const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
+    const previewAudioRef = useRef<HTMLAudioElement | null>(null);
 
     // Pexels states
-    const [visualStyle, setVisualStyle] = useState<'stock' | 'ai' | 'infographic'>('stock');
+    const [visualStyle, setVisualStyle] = useState<'stock' | 'ai'>('stock');
     const [sceneVideos, setSceneVideos] = useState<SelectedSceneVideo[]>([]);
     const [isGeneratingVideos, setIsGeneratingVideos] = useState(false);
 
@@ -77,30 +81,77 @@ function LongVideoCreate() {
     const [finalVideoBlob, setFinalVideoBlob] = useState<Blob | null>(null);
     const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
 
+    // Credit confirmation modal
+    const [showCreditModal, setShowCreditModal] = useState(false);
+    const [userCredits, setUserCredits] = useState<number>(0);
+    const [isDeductingCredits, setIsDeductingCredits] = useState(false);
+
     // Fetch voices on mount
     useEffect(() => {
         const fetchVoices = async () => {
             setIsLoadingVoices(true);
             try {
-                const fetchedVoices = await getVoices();
-                setVoices(fetchedVoices);
-                if (fetchedVoices.length > 0) {
-                    setSelectedVoice(fetchedVoices[0].voice_id);
+                const fetchedLanguages = await getPollyVoices();
+                setLanguages(fetchedLanguages);
+                // Set default language and voice (Ruth for en-US)
+                const enUS = fetchedLanguages.find(l => l.locale === 'en-US');
+                if (enUS) {
+                    setFilteredVoices(enUS.voices);
+                    setSelectedLanguage('en-US');
+                    const defaultVoice = enUS.voices.find(v => v.id === 'Ruth') || enUS.voices[0];
+                    if (defaultVoice) setSelectedVoiceId(defaultVoice.id);
+                } else if (fetchedLanguages.length > 0) {
+                    setFilteredVoices(fetchedLanguages[0].voices);
+                    setSelectedLanguage(fetchedLanguages[0].locale);
+                    if (fetchedLanguages[0].voices.length > 0) {
+                        setSelectedVoiceId(fetchedLanguages[0].voices[0].id);
+                    }
                 }
             } catch (error) {
                 console.error('Error fetching voices:', error);
-                addNotification({
-                    type: 'error',
-                    title: 'Ses Yüklenemedi',
-                    message: 'ElevenLabs sesleri yüklenirken bir hata oluştu.',
-                });
             } finally {
                 setIsLoadingVoices(false);
             }
         };
 
         fetchVoices();
-    }, [addNotification]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Update filtered voices when language changes
+    useEffect(() => {
+        const lang = languages.find(l => l.locale === selectedLanguage);
+        if (lang) {
+            setFilteredVoices(lang.voices);
+            if (lang.voices.length > 0 && !lang.voices.find(v => v.id === selectedVoiceId)) {
+                setSelectedVoiceId(lang.voices[0].id);
+            }
+        }
+    }, [selectedLanguage, languages, selectedVoiceId]);
+
+    const handleLanguageSelect = (locale: string) => {
+        setSelectedLanguage(locale);
+        setShowLanguageDropdown(false);
+        setLanguageSearch('');
+    };
+
+    const handlePreviewVoice = async () => {
+        if (!selectedVoiceId || isPreviewPlaying) return;
+        setIsPreviewPlaying(true);
+        try {
+            const result = await previewVoice(selectedVoiceId);
+            if (previewAudioRef.current) {
+                previewAudioRef.current.pause();
+            }
+            const audio = new Audio(result.audioUrl);
+            previewAudioRef.current = audio;
+            audio.onended = () => setIsPreviewPlaying(false);
+            audio.onerror = () => setIsPreviewPlaying(false);
+            await audio.play();
+        } catch {
+            setIsPreviewPlaying(false);
+        }
+    };
 
     const currentStepIndex = steps.findIndex((s) => s.id === currentStep);
 
@@ -108,8 +159,8 @@ function LongVideoCreate() {
         if (!topic) {
             addNotification({
                 type: 'warning',
-                title: 'Eksik Bilgi',
-                message: 'Lütfen video konusu girin.',
+                title: 'Missing Information',
+                message: 'Please enter a video topic.',
             });
             return;
         }
@@ -149,8 +200,8 @@ function LongVideoCreate() {
             console.error('Error generating script:', error);
             addNotification({
                 type: 'error',
-                title: 'Hata',
-                message: 'Script oluşturulurken bir hata oluştu.',
+                title: 'Error',
+                message: 'An error occurred while generating the script.',
             });
         } finally {
             setIsGenerating(false);
@@ -159,10 +210,10 @@ function LongVideoCreate() {
     };
 
     const handleGenerateVoiceover = async () => {
-        if (!script || !selectedVoice) {
+        if (!script || !selectedVoiceId) {
             addNotification({
                 type: 'warning',
-                title: 'Eksik Bilgi',
+                title: 'Missing Information',
                 message: 'Please write a script first and select a voice.',
             });
             return;
@@ -170,17 +221,7 @@ function LongVideoCreate() {
 
         setIsGeneratingAudio(true);
         try {
-            const result = await textToSpeech({
-                text: script,
-                voice_id: selectedVoice,
-                model_id: 'eleven_multilingual_v2',
-                voice_settings: {
-                    stability: 0.5,
-                    similarity_boost: 0.75,
-                    style: 0.0,
-                    use_speaker_boost: true,
-                },
-            });
+            const result = await synthesizeSpeech(script, selectedVoiceId, 'neural');
 
             setAudioUrl(result.audioUrl);
             setAudioBlob(result.audio);
@@ -188,22 +229,17 @@ function LongVideoCreate() {
             addNotification({
                 type: 'success',
                 title: 'Voiceover Completed',
-                message: 'Ses dosyanız başarıyla oluşturuldu!',
+                message: 'Your audio file has been successfully created with AWS Polly Neural!',
             });
         } catch (error) {
             console.error('Error generating voiceover:', error);
 
-            let errorMessage = 'Ses oluşturulurken bir hata oluştu.';
-
+            let errorMessage = 'An error occurred while generating audio.';
             if (error instanceof Error) {
-                if (error.message.includes('API key is missing')) {
-                    errorMessage = 'ElevenLabs API anahtarı bulunamadı. Lütfen .env dosyasını kontrol edin.';
-                } else if (error.message.includes('401')) {
-                    errorMessage = 'ElevenLabs API anahtarı geçersiz. Lütfen .env dosyasındaki API key\'i kontrol edin.';
-                } else if (error.message.includes('quota')) {
-                    errorMessage = 'ElevenLabs API kotanız dolmuş. Lütfen hesabınızı kontrol edin.';
+                if (error.message.includes('fetch')) {
+                    errorMessage = 'Polly server not reachable. Make sure to run: cd backend && node polly-server.js';
                 } else {
-                    errorMessage = `Hata: ${error.message}`;
+                    errorMessage = `Error: ${error.message}`;
                 }
             }
 
@@ -227,8 +263,8 @@ function LongVideoCreate() {
         if (!script || visualStyle !== 'stock') {
             addNotification({
                 type: 'info',
-                title: 'Bilgi',
-                message: visualStyle === 'stock' ? 'Stock video seçimi için script gerekli.' : 'Bu görsel stili henüz aktif değil.',
+                title: 'Info',
+                message: visualStyle === 'stock' ? 'Script is required for stock video selection.' : 'This visual style is not yet active.',
             });
             return;
         }
@@ -267,7 +303,7 @@ function LongVideoCreate() {
             console.log('📝 Parsed scenes:', scenes.length, 'Total duration:', audioDuration);
 
             if (scenes.length === 0) {
-                throw new Error('Script sahnelere ayrılamadı.');
+                throw new Error('Script could not be parsed into scenes.');
             }
 
             // Find videos for all scenes
@@ -276,15 +312,15 @@ function LongVideoCreate() {
 
             addNotification({
                 type: 'success',
-                title: 'Videolar Hazır',
-                message: `${selectedVideos.length} sahne için video seçildi!`,
+                title: 'Videos Ready',
+                message: `Videos selected for ${selectedVideos.length} scenes!`,
             });
         } catch (error) {
             console.error('Error generating videos:', error);
             addNotification({
                 type: 'error',
-                title: 'Video Seçim Hatası',
-                message: 'Pexels videoları seçilirken bir hata oluştu.',
+                title: 'Video Selection Error',
+                message: 'An error occurred while selecting stock videos.',
             });
         } finally {
             setIsGeneratingVideos(false);
@@ -295,8 +331,8 @@ function LongVideoCreate() {
         if (!script || visualStyle !== 'ai' || !audioBlob) {
             addNotification({
                 type: 'info',
-                title: 'Bilgi',
-                message: 'AI görsel oluşturma için script ve seslendirme gerekli.',
+                title: 'Info',
+                message: 'Script and voiceover are required for AI image generation.',
             });
             return;
         }
@@ -337,15 +373,15 @@ function LongVideoCreate() {
 
             addNotification({
                 type: 'success',
-                title: 'Görseller Hazır',
-                message: `${images.length} AI görsel oluşturuldu!`,
+                title: 'Images Ready',
+                message: `${images.length} AI images generated!`,
             });
         } catch (error) {
             console.error('Error generating AI images:', error);
             addNotification({
                 type: 'error',
                 title: 'Image Generation Error',
-                message: error instanceof Error ? error.message : 'Bilinmeyen hata.',
+                message: error instanceof Error ? error.message : 'Unknown error.',
             });
         } finally {
             setIsGeneratingAiImages(false);
@@ -357,8 +393,8 @@ function LongVideoCreate() {
         if (visualStyle === 'stock' && (!audioBlob || sceneVideos.length === 0)) {
             addNotification({
                 type: 'error',
-                title: 'Eksik İçerik',
-                message: 'Video oluşturmak için seslendirme ve sahneler gerekli.',
+                title: 'Missing Content',
+                message: 'Voiceover and scenes are required to create a video.',
             });
             return;
         }
@@ -367,8 +403,8 @@ function LongVideoCreate() {
         if (visualStyle === 'ai' && (!audioBlob || aiImages.length === 0)) {
             addNotification({
                 type: 'error',
-                title: 'Eksik İçerik',
-                message: 'Video oluşturmak için seslendirme ve AI görseller gerekli.',
+                title: 'Missing Content',
+                message: 'Voiceover and AI images are required to create a video.',
             });
             return;
         }
@@ -377,7 +413,7 @@ function LongVideoCreate() {
         setAssemblyProgress({
             stage: 'init',
             progress: 0,
-            message: 'Hazırlanıyor...',
+            message: 'Preparing...',
         });
 
         try {
@@ -423,17 +459,55 @@ function LongVideoCreate() {
             setFinalVideoBlob(videoBlob);
             setFinalVideoUrl(videoUrl);
 
+            // ── Save to Library ───────────────────────────────────────────────
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                    addNotification({ type: 'info', title: 'Saving', message: 'Saving video to library...' });
+
+                    let videoUrl: string | null = null;
+
+                    // Try to upload to Supabase Storage
+                    try {
+                        videoUrl = await uploadVideo(videoBlob, user.id);
+                    } catch (uploadErr) {
+                        console.warn('Upload failed, saving without cloud URL:', uploadErr);
+                    }
+
+                    await saveVideo({
+                        id: crypto.randomUUID(),
+                        title: topic || 'Untitled Long Video',
+                        description: `${duration} minute video about: ${topic}`,
+                        type: 'long',
+                        createdAt: new Date().toISOString(),
+                        duration: duration * 60,
+                        videoUrl: videoUrl || '',
+                        script: script,
+                        userId: user.id,
+                    });
+
+                    addNotification({ type: 'success', title: 'Saved to Library', message: 'Video added to your library!' });
+                }
+            } catch (saveError) {
+                console.error('Failed to save to library:', saveError);
+                addNotification({
+                    type: 'warning',
+                    title: 'Save Failed',
+                    message: `Video created but library save failed. Please download it.`,
+                });
+            }
+
             addNotification({
                 type: 'success',
-                title: 'Video Hazır!',
-                message: 'Videonuz başarıyla oluşturuldu!',
+                title: 'Video Ready!',
+                message: 'Your video has been successfully created!',
             });
         } catch (error) {
             console.error('Video assembly error:', error);
             addNotification({
                 type: 'error',
                 title: 'Video Creation Error',
-                message: error instanceof Error ? error.message : 'Bilinmeyen hata.',
+                message: error instanceof Error ? error.message : 'Unknown error.',
             });
         } finally {
             setIsAssembling(false);
@@ -458,6 +532,60 @@ function LongVideoCreate() {
         const prevIndex = currentStepIndex - 1;
         if (prevIndex >= 0) {
             setCurrentStep(steps[prevIndex].id);
+        }
+    };
+
+    // Show credit confirmation before moving from Script → Voiceover
+    const handleContinueClick = async () => {
+        if (currentStep === 'script') {
+            if (!script) {
+                addNotification({ type: 'warning', title: 'Script Required', message: 'Please generate or write a script first.' });
+                return;
+            }
+            // Fetch current balance to show in modal
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                    const { data: sub } = await supabase.from('subscriptions').select('credits').eq('user_id', user.id).single();
+                    setUserCredits(sub?.credits ?? 0);
+                }
+            } catch { setUserCredits(0); }
+            setShowCreditModal(true);
+        } else {
+            goToNextStep();
+        }
+    };
+
+    const handleConfirmCredits = async () => {
+        setIsDeductingCredits(true);
+        const creditsToDeduct = duration * 250;
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not logged in');
+
+            const newCredits = Math.max(0, userCredits - creditsToDeduct);
+
+            const { error } = await supabase
+                .from('subscriptions')
+                .update({ credits: newCredits, updated_at: new Date().toISOString() })
+                .eq('user_id', user.id);
+
+            if (error) throw error;
+
+            await supabase.from('credit_transactions').insert({
+                user_id: user.id,
+                amount: -creditsToDeduct,
+                type: 'USAGE',
+                description: `Long video started: ${duration} min × 250 credits`,
+                balance_after: newCredits,
+            });
+
+            setShowCreditModal(false);
+            goToNextStep();
+        } catch (err) {
+            addNotification({ type: 'error', title: 'Credit Error', message: 'Could not deduct credits. Please try again.' });
+        } finally {
+            setIsDeductingCredits(false);
         }
     };
 
@@ -497,14 +625,14 @@ function LongVideoCreate() {
                         <div className="step-header">
                             <FileText size={28} className="step-icon" />
                             <div>
-                                <h2 className="heading-md">Video Scripti</h2>
-                                <p>AI ile otomatik script oluşturun veya kendiniz yazın</p>
+                                <h2 className="heading-md">Video Script</h2>
+                                <p>Generate a script automatically with AI or write your own</p>
                             </div>
                         </div>
 
                         {/* Model Selection */}
                         <div className="model-selection">
-                            <label className="input-label">AI Model Kalitesi</label>
+                            <label className="input-label">AI Model Quality</label>
                             <div className="model-grid">
                                 {Object.entries(MODEL_CONFIGS).map(([key, config]) => (
                                     <button
@@ -526,18 +654,18 @@ function LongVideoCreate() {
 
                         <div className="form-grid">
                             <div className="input-group">
-                                <label className="input-label">Video Konusu</label>
+                                <label className="input-label">Video Topic</label>
                                 <input
                                     type="text"
                                     className="input-field"
-                                    placeholder="Örn: Yapay zeka ile para kazanmanın 10 yolu"
+                                    placeholder="E.g: 10 ways to make money with AI"
                                     value={topic}
                                     onChange={(e) => setTopic(e.target.value)}
                                 />
                             </div>
 
                             <div className="input-group">
-                                <label className="input-label">Hedef Süre (Dakika)</label>
+                                <label className="input-label">Target Duration (Minutes)</label>
                                 <div className="duration-slider">
                                     <input
                                         type="range"
@@ -546,7 +674,7 @@ function LongVideoCreate() {
                                         value={duration}
                                         onChange={(e) => setDuration(Number(e.target.value))}
                                     />
-                                    <span className="duration-value">{duration} dk</span>
+                                    <span className="duration-value">{duration} min</span>
                                 </div>
                             </div>
                         </div>
@@ -575,7 +703,7 @@ function LongVideoCreate() {
                             <div className="optimized-concept glass-card">
                                 <h4>
                                     <Check size={16} className="check-icon" />
-                                    Optimize Edilmiş Kurgu
+                                    Optimized Concept
                                 </h4>
                                 <div className="concept-content">
                                     {optimizedConcept}
@@ -585,12 +713,12 @@ function LongVideoCreate() {
 
                         <div className="input-group">
                             <label className="input-label">
-                                Video Scripti
-                                {script && <span className="char-count">{script.length} karakter</span>}
+                                Video Script
+                                {script && <span className="char-count">{script.length} characters</span>}
                             </label>
                             <textarea
                                 className="input-field textarea-field script-textarea"
-                                placeholder="AI ile oluşturun veya kendi scriptinizi yazın..."
+                                placeholder="Generate with AI or write your own script..."
                                 value={script}
                                 onChange={(e) => setScript(e.target.value)}
                             />
@@ -614,45 +742,97 @@ function LongVideoCreate() {
                             <Mic size={28} className="step-icon" />
                             <div>
                                 <h2 className="heading-md">Voiceover</h2>
-                                <p>AI seslendirme ayarlarını yapın</p>
+                                <p>Configure AI voiceover settings (AWS Polly Neural — Premium Quality)</p>
                             </div>
                         </div>
 
                         {isLoadingVoices ? (
                             <div className="loading-voices">
                                 <RefreshCw size={24} className="animate-spin" />
-                                <p>Sesler yükleniyor...</p>
+                                <p>Loading voices...</p>
                             </div>
                         ) : (
-                            <div className="voice-grid">
-                                {voices.map((voice) => (
-                                    <button
-                                        key={voice.voice_id}
-                                        className={`voice-card glass-card ${selectedVoice === voice.voice_id ? 'selected' : ''}`}
-                                        onClick={() => setSelectedVoice(voice.voice_id)}
-                                    >
-                                        <div className="voice-avatar">
-                                            <Volume2 size={24} />
+                            <div className="voice-selector-panel">
+                                {/* Language Dropdown */}
+                                <div className="input-group">
+                                    <label className="input-label">Language</label>
+                                    <div className="searchable-dropdown" style={{ position: 'relative' }}>
+                                        <div
+                                            className="dropdown-trigger input-field"
+                                            onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
+                                            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                                        >
+                                            <span>{languages.find(l => l.locale === selectedLanguage)?.language || selectedLanguage}</span>
+                                            <ArrowRight size={14} style={{ transform: showLanguageDropdown ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
                                         </div>
-                                        <div className="voice-info">
-                                            <span className="voice-name">{voice.name}</span>
-                                            <span className="voice-meta">
-                                                {voice.labels?.accent || 'English'} • {voice.labels?.gender || 'Neutral'}
-                                            </span>
-                                        </div>
-                                        {selectedVoice === voice.voice_id && (
-                                            <div className="voice-selected">
-                                                <Check size={16} />
+                                        {showLanguageDropdown && (
+                                            <div className="dropdown-menu glass-card" style={{ position: 'absolute', top: '100%', left: 0, right: 0, maxHeight: '280px', overflowY: 'auto', zIndex: 100, marginTop: '4px', borderRadius: '12px', padding: '4px' }}>
+                                                <div style={{ padding: '8px', position: 'sticky', top: 0, background: 'var(--bg-card)', zIndex: 1 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', borderRadius: '8px', background: 'var(--bg-tertiary)' }}>
+                                                        <Search size={14} style={{ opacity: 0.5 }} />
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Search language..."
+                                                            value={languageSearch}
+                                                            onChange={(e) => setLanguageSearch(e.target.value)}
+                                                            style={{ background: 'transparent', border: 'none', outline: 'none', color: 'inherit', width: '100%', fontSize: '14px' }}
+                                                            autoFocus
+                                                        />
+                                                    </div>
+                                                </div>
+                                                {languages
+                                                    .filter(l => l.language.toLowerCase().includes(languageSearch.toLowerCase()) || l.locale.toLowerCase().includes(languageSearch.toLowerCase()))
+                                                    .map(lang => (
+                                                        <div
+                                                            key={lang.locale}
+                                                            className={`dropdown-item ${selectedLanguage === lang.locale ? 'active' : ''}`}
+                                                            onClick={() => handleLanguageSelect(lang.locale)}
+                                                            style={{ padding: '8px 12px', cursor: 'pointer', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'background 0.15s' }}
+                                                            onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-tertiary)')}
+                                                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                                                        >
+                                                            <span style={{ fontSize: '14px' }}>{lang.language} <span style={{ opacity: 0.5, fontSize: '12px' }}>({lang.locale})</span></span>
+                                                            {selectedLanguage === lang.locale && <Check size={14} className="text-primary" />}
+                                                        </div>
+                                                    ))}
                                             </div>
                                         )}
-                                    </button>
-                                ))}
+                                    </div>
+                                </div>
+
+                                {/* Voice Dropdown + Preview */}
+                                <div className="input-group">
+                                    <label className="input-label">Voice</label>
+                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                        <select
+                                            className="input-field"
+                                            value={selectedVoiceId}
+                                            onChange={(e) => setSelectedVoiceId(e.target.value)}
+                                            style={{ flex: 1 }}
+                                        >
+                                            {filteredVoices.map(v => (
+                                                <option key={v.id} value={v.id}>
+                                                    {v.name} ({v.gender})
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <button
+                                            className="btn btn-ghost"
+                                            onClick={handlePreviewVoice}
+                                            disabled={isPreviewPlaying}
+                                            title="Preview voice"
+                                            style={{ minWidth: '42px', height: '42px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                        >
+                                            {isPreviewPlaying ? <RefreshCw size={18} className="animate-spin" /> : <Play size={18} />}
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         )}
 
                         <div className="voice-settings">
                             <div className="input-group">
-                                <label className="input-label">Konuşma Hızı: {speed}x</label>
+                                <label className="input-label">Speech Speed: {speed}x</label>
                                 <input
                                     type="range"
                                     min={0.5}
@@ -668,7 +848,7 @@ function LongVideoCreate() {
                         <button
                             className="btn btn-primary"
                             onClick={handleGenerateVoiceover}
-                            disabled={!script || !selectedVoice || isGeneratingAudio}
+                            disabled={!script || !selectedVoiceId || isGeneratingAudio}
                         >
                             {isGeneratingAudio ? (
                                 <>
@@ -686,17 +866,17 @@ function LongVideoCreate() {
                         {audioUrl && (
                             <div className="audio-player glass-card">
                                 <div className="audio-header">
-                                    <h4>Ses Önizleme</h4>
+                                    <h4>Audio Preview</h4>
                                     <button className="btn btn-ghost btn-sm" onClick={handleDownloadAudio}>
                                         <Download size={16} />
-                                        İndir
+                                        Download
                                     </button>
                                 </div>
                                 <audio controls src={audioUrl} className="audio-element">
-                                    Tarayıcınız ses çalmayı desteklemiyor.
+                                    Your browser does not support audio playback.
                                 </audio>
                                 <p className="audio-info">
-                                    Tahmini süre: ~{estimateAudioDuration(script)} saniye
+                                    Estimated duration: ~{estimateAudioDuration(script)} seconds
                                 </p>
                             </div>
                         )}
@@ -710,20 +890,20 @@ function LongVideoCreate() {
                             <Film size={28} className="step-icon" />
                             <div>
                                 <h2 className="heading-md">Video Editing</h2>
-                                <p>Görsel ve müzik ayarlarını yapın</p>
+                                <p>Configure visual and audio settings</p>
                             </div>
                         </div>
 
                         <div className="assembly-options">
                             <div className="assembly-section">
-                                <h3><Image size={20} /> Görsel Stili</h3>
+                                <h3><Image size={20} /> Visual Style</h3>
                                 <div className="style-grid">
                                     <button
                                         className={`style-option ${visualStyle === 'stock' ? 'selected' : ''}`}
                                         onClick={() => setVisualStyle('stock')}
                                     >
                                         <span className="style-icon">🎬</span>
-                                        <span>Stock Video (Pexels)</span>
+                                        <span>Stock Video</span>
                                         {visualStyle === 'stock' && <Check size={14} className="style-check" />}
                                     </button>
                                     <button
@@ -731,17 +911,8 @@ function LongVideoCreate() {
                                         onClick={() => setVisualStyle('ai')}
                                     >
                                         <span className="style-icon">🎨</span>
-                                        <span>AI Görsel (Fal.AI)</span>
+                                        <span>AI Generated</span>
                                         {visualStyle === 'ai' && <Check size={14} className="style-check" />}
-                                    </button>
-                                    <button
-                                        className={`style-option ${visualStyle === 'infographic' ? 'selected' : ''}`}
-                                        onClick={() => setVisualStyle('infographic')}
-                                        disabled
-                                    >
-                                        <span className="style-icon">📊</span>
-                                        <span>Infografik</span>
-                                        <span className="coming-soon">Yakında</span>
                                     </button>
                                 </div>
                             </div>
@@ -756,29 +927,29 @@ function LongVideoCreate() {
                                         {isGeneratingVideos ? (
                                             <>
                                                 <RefreshCw size={18} className="animate-spin" />
-                                                Pexels'den videolar seçiliyor...
+                                                Selecting videos...
                                             </>
                                         ) : (
                                             <>
                                                 <Film size={18} />
-                                                Sahneler için Video Seç
+                                                Select Videos for Scenes
                                             </>
                                         )}
                                     </button>
 
                                     {sceneVideos.length > 0 && (
                                         <div className="scene-videos-preview">
-                                            <h4>🎬 Seçilen Videolar ({sceneVideos.length} sahne)</h4>
+                                            <h4>🎬 Selected Videos ({sceneVideos.length} scenes)</h4>
                                             <div className="scene-videos-grid">
                                                 {sceneVideos.map((sceneVideo, index) => (
                                                     <div key={index} className="scene-video-card">
                                                         <img
                                                             src={sceneVideo.video.image}
-                                                            alt={`Sahne ${sceneVideo.scene.sceneNumber}`}
+                                                            alt={`Scene ${sceneVideo.scene.sceneNumber}`}
                                                             className="scene-thumbnail"
                                                         />
                                                         <div className="scene-video-info">
-                                                            <span className="scene-number">Sahne {sceneVideo.scene.sceneNumber}</span>
+                                                            <span className="scene-number">Scene {sceneVideo.scene.sceneNumber}</span>
                                                             <span className="scene-duration">
                                                                 {Math.round(sceneVideo.scene.duration)}s
                                                                 {sceneVideo.needsLooping && ` (x${sceneVideo.loopCount})`}
@@ -797,7 +968,7 @@ function LongVideoCreate() {
                                 <div className="pexels-section">
                                     <div className="info-banner" style={{ marginBottom: '16px', padding: '12px', background: '#1a1f2e', borderRadius: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
                                         <AlertCircle size={16} />
-                                        <span>Fal.AI Flux Pro ile script'inizden otomatik AI görseller oluşturulacak (5-12s sahne süreleri)</span>
+                                        <span>AI images will be automatically generated from your script using Flux Pro (5-12s scene durations)</span>
                                     </div>
 
                                     <button
@@ -808,7 +979,7 @@ function LongVideoCreate() {
                                         {isGeneratingAiImages ? (
                                             <>
                                                 <RefreshCw size={18} className="animate-spin" />
-                                                AI görseller oluşturuluyor... {aiImageProgress.current}/{aiImageProgress.total}
+                                                Generating AI images... {aiImageProgress.current}/{aiImageProgress.total}
                                             </>
                                         ) : (
                                             <>
@@ -826,11 +997,11 @@ function LongVideoCreate() {
                                                     <div key={sceneImage.sceneNumber} className="scene-video-card">
                                                         <img
                                                             src={sceneImage.imageUrl}
-                                                            alt={`Sahne ${sceneImage.sceneNumber}`}
+                                                            alt={`Scene ${sceneImage.sceneNumber}`}
                                                             className="scene-thumbnail"
                                                         />
                                                         <div className="scene-video-info">
-                                                            <span className="scene-number">Sahne {sceneImage.sceneNumber}</span>
+                                                            <span className="scene-number">Scene {sceneImage.sceneNumber}</span>
                                                             <span className="scene-duration">{sceneImage.duration}s</span>
                                                         </div>
                                                     </div>
@@ -841,24 +1012,6 @@ function LongVideoCreate() {
                                 </div>
                             )}
 
-
-                            <div className="assembly-section">
-                                <h3><Music size={20} /> Arka Plan Müziği</h3>
-                                <div className="music-options">
-                                    <button className="music-option selected">
-                                        <span>🎵 Motivasyonel</span>
-                                    </button>
-                                    <button className="music-option">
-                                        <span>🎶 Sakin</span>
-                                    </button>
-                                    <button className="music-option">
-                                        <span>🎸 Enerjik</span>
-                                    </button>
-                                    <button className="music-option">
-                                        <span>🔇 Müzik Yok</span>
-                                    </button>
-                                </div>
-                            </div>
                         </div>
 
                         {/* Video Assembly Button */}
@@ -871,7 +1024,7 @@ function LongVideoCreate() {
                                 {isAssembling ? (
                                     <>
                                         <RefreshCw size={20} className="animate-spin" />
-                                        {assemblyProgress?.message || 'Video oluşturuluyor...'}
+                                        {assemblyProgress?.message || 'Creating video...'}
                                     </>
                                 ) : (
                                     <>
@@ -901,7 +1054,7 @@ function LongVideoCreate() {
                         {/* Final Video Preview */}
                         {finalVideoUrl && (
                             <div className="final-video-section">
-                                <h3>✅ Video Hazır!</h3>
+                                <h3>✅ Video Ready!</h3>
                                 <div className="video-container">
                                     <video
                                         src={finalVideoUrl}
@@ -911,15 +1064,11 @@ function LongVideoCreate() {
                                 </div>
                                 <div className="final-video-actions">
                                     <button
-                                        className="btn btn-secondary"
+                                        className="btn btn-primary"
                                         onClick={handleDownloadFinalVideo}
                                     >
                                         <Download size={18} />
-                                        Videoyu İndir
-                                    </button>
-                                    <button className="btn btn-primary">
-                                        <Youtube size={18} />
-                                        YouTube'a Yükle
+                                        Download Video
                                     </button>
                                 </div>
                             </div>
@@ -928,75 +1077,14 @@ function LongVideoCreate() {
                         <div className="assembly-preview">
                             <div className="preview-placeholder">
                                 <Clock size={48} />
-                                <p>Video oluşturuluyor...</p>
+                                <p>Creating video...</p>
                                 <span>Estimated time: 5-10 minutes</span>
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* Step 4: Publish */}
-                {currentStep === 'publish' && (
-                    <div className="step-content">
-                        <div className="step-header">
-                            <Upload size={28} className="step-icon" />
-                            <div>
-                                <h2 className="heading-md">YouTube'a Yayınla</h2>
-                                <p>Video detaylarını girin ve yayınlayın</p>
-                            </div>
-                        </div>
 
-                        <div className="publish-form">
-                            <div className="input-group">
-                                <label className="input-label">Video Başlığı</label>
-                                <input
-                                    type="text"
-                                    className="input-field"
-                                    placeholder="Dikkat çekici bir başlık yazın..."
-                                    value={title}
-                                    onChange={(e) => setTitle(e.target.value)}
-                                />
-                            </div>
-
-                            <div className="input-group">
-                                <label className="input-label">Açıklama</label>
-                                <textarea
-                                    className="input-field textarea-field"
-                                    placeholder="Video açıklaması..."
-                                    value={description}
-                                    onChange={(e) => setDescription(e.target.value)}
-                                />
-                            </div>
-
-                            <div className="input-group">
-                                <label className="input-label">Etiketler (virgülle ayırın)</label>
-                                <input
-                                    type="text"
-                                    className="input-field"
-                                    placeholder="yapay zeka, para kazanma, tutorial..."
-                                    value={tags}
-                                    onChange={(e) => setTags(e.target.value)}
-                                />
-                            </div>
-
-                            <div className="publish-options">
-                                <button className="publish-option selected">
-                                    <Youtube size={20} />
-                                    <span>Hemen Yayınla</span>
-                                </button>
-                                <button className="publish-option">
-                                    <Clock size={20} />
-                                    <span>Zamanla</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <button className="btn btn-primary btn-lg publish-btn">
-                            <Youtube size={20} />
-                            YouTube'a Yükle
-                        </button>
-                    </div>
-                )}
             </div>
 
             {/* Navigation */}
@@ -1004,17 +1092,64 @@ function LongVideoCreate() {
                 {currentStepIndex > 0 && (
                     <button className="btn btn-secondary" onClick={goToPrevStep}>
                         <ArrowLeft size={18} />
-                        Geri
+                        Back
                     </button>
                 )}
                 <div className="nav-spacer" />
                 {currentStepIndex < steps.length - 1 && (
-                    <button className="btn btn-primary" onClick={goToNextStep}>
+                    <button className="btn btn-primary" onClick={handleContinueClick}>
                         Continue
                         <ArrowRight size={18} />
                     </button>
                 )}
             </div>
+
+            {/* Credit Confirmation Modal */}
+            {showCreditModal && (
+                <div className="modal-overlay" onClick={() => setShowCreditModal(false)}>
+                    <div className="modal-content glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420, padding: '32px', textAlign: 'center' }}>
+                        <div style={{ fontSize: 48, marginBottom: 12 }}>💳</div>
+                        <h2 className="heading-md" style={{ marginBottom: 8 }}>Confirm Credit Usage</h2>
+                        <p className="text-muted" style={{ marginBottom: 24 }}>
+                            Creating a <strong>{duration}-minute</strong> video will cost:
+                        </p>
+                        <div style={{ background: 'var(--bg-tertiary)', borderRadius: 12, padding: '16px 24px', marginBottom: 24 }}>
+                            <div style={{ fontSize: 36, fontWeight: 700, color: 'var(--color-primary)' }}>
+                                {(duration * 250).toLocaleString()} Credits
+                            </div>
+                            <div className="text-sm text-muted" style={{ marginTop: 4 }}>
+                                {duration} min × 250 credits/min
+                            </div>
+                        </div>
+                        <div className="text-sm text-muted" style={{ marginBottom: 24 }}>
+                            Your balance: <strong>{userCredits.toLocaleString()}</strong> credits
+                            {userCredits < duration * 250 && (
+                                <div style={{ color: 'var(--color-error, #ef4444)', marginTop: 6 }}>
+                                    ⚠️ Insufficient credits!
+                                </div>
+                            )}
+                        </div>
+                        <div style={{ display: 'flex', gap: 12 }}>
+                            <button
+                                className="btn btn-secondary"
+                                style={{ flex: 1 }}
+                                onClick={() => setShowCreditModal(false)}
+                                disabled={isDeductingCredits}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="btn btn-primary"
+                                style={{ flex: 1 }}
+                                onClick={handleConfirmCredits}
+                                disabled={isDeductingCredits || userCredits < duration * 250}
+                            >
+                                {isDeductingCredits ? 'Processing...' : 'Confirm & Continue →'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

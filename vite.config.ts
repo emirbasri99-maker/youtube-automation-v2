@@ -16,6 +16,14 @@ export default defineConfig({
                 changeOrigin: true,
                 rewrite: (path) => path.replace(/^\/api\/apify/, ''),
                 secure: false,
+            },
+            '/api/tts': {
+                target: 'http://localhost:5050',
+                changeOrigin: true,
+            },
+            '/api/polly': {
+                target: 'http://localhost:5051',
+                changeOrigin: true,
             }
         }
     },

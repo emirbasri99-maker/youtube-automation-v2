@@ -43,7 +43,7 @@ export const SUBSCRIPTION_PLANS: Record<PlanType, SubscriptionPlan> = {
         type: PlanType.TRIAL,
         name: 'Trial',
         price: 1,
-        credits: 400,
+        credits: 1500,
         description: 'Try our platform with limited credits',
         features: {
             allowedModels: [AIModel.FAST],
@@ -58,7 +58,7 @@ export const SUBSCRIPTION_PLANS: Record<PlanType, SubscriptionPlan> = {
         type: PlanType.STARTER,
         name: 'Starter',
         price: 29,
-        credits: 2500,
+        credits: 30000,
         description: 'Perfect for content creators getting started',
         features: {
             allowedModels: [AIModel.FAST],
@@ -73,7 +73,7 @@ export const SUBSCRIPTION_PLANS: Record<PlanType, SubscriptionPlan> = {
         type: PlanType.PROFESSIONAL,
         name: 'Professional',
         price: 69,
-        credits: 7500,
+        credits: 75000,
         description: 'For serious creators scaling their content',
         popular: true,
         features: {
@@ -89,7 +89,7 @@ export const SUBSCRIPTION_PLANS: Record<PlanType, SubscriptionPlan> = {
         type: PlanType.BUSINESS,
         name: 'Business',
         price: 149,
-        credits: 20000,
+        credits: 160000,
         description: 'For agencies and power users',
         features: {
             allowedModels: [AIModel.FAST, AIModel.STANDARD, AIModel.PRO],

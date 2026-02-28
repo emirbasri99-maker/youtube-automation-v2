@@ -13,10 +13,10 @@ const supabase = createClient(
 
 // Plan credits mapping
 const PLAN_CREDITS: Record<string, number> = {
-    TRIAL: 400,
-    STARTER: 2000,
-    PROFESSIONAL: 10000,
-    BUSINESS: 50000,
+    TRIAL: 1500,
+    STARTER: 30000,
+    PROFESSIONAL: 75000,
+    BUSINESS: 160000,
 };
 
 export default async function handler(req: any, res: any) {
@@ -66,75 +66,48 @@ export default async function handler(req: any, res: any) {
                 // Get credits for this plan
                 const credits = PLAN_CREDITS[planType] || 0;
 
-                // Check if user exists
-                const { data: existingUser, error: findError } = await supabase
-                    .from('users')
-                    .select('id, credits')
+                // Check if user exists in profiles table
+                const { data: existingProfile, error: findError } = await supabase
+                    .from('profiles')
+                    .select('id')
                     .eq('email', email)
                     .single();
 
+                // Also try finding by userId from metadata if email lookup fails
+                const lookupId = existingProfile?.id || userId;
+
                 if (findError && findError.code !== 'PGRST116') {
-                    console.error('Error finding user:', findError);
+                    console.error('Error finding user profile:', findError);
                     break;
                 }
 
-                if (existingUser) {
-                    // User exists - add credits and update plan
-                    console.log('User exists, adding credits:', existingUser.id);
+                if (lookupId && lookupId !== 'guest') {
+                    // User exists — update subscriptions table with correct plan + credits
+                    console.log(`Updating subscription for user ${lookupId}: ${planType} = ${credits} credits`);
 
                     const { error: updateError } = await supabase
-                        .from('users')
+                        .from('subscriptions')
                         .update({
-                            credits: (existingUser.credits || 0) + credits,
-                            current_plan: planType,
+                            credits: credits, // Set exact credits for this plan (not additive)
+                            plan_type: planType,
                             updated_at: new Date().toISOString(),
                         })
-                        .eq('id', existingUser.id);
+                        .eq('user_id', lookupId);
 
                     if (updateError) {
-                        console.error('Error updating user:', updateError);
+                        console.error('Error updating subscription:', updateError);
                     } else {
-                        console.log(`Added ${credits} credits to user ${existingUser.id}`);
+                        console.log(`✅ Set ${credits} credits for user ${lookupId} on ${planType} plan`);
                     }
-                } else if (userId === 'guest') {
-                    // Create new user for guest checkout
-                    console.log('Creating new user for email:', email);
 
-                    // Generate temporary password
-                    const tempPassword = Math.random().toString(36).slice(-12);
-
-                    // Create auth user
-                    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-                        email,
-                        password: tempPassword,
-                        email_confirm: true, // Auto-confirm email
+                    // Log the transaction
+                    await supabase.from('credit_transactions').insert({
+                        user_id: lookupId,
+                        amount: credits,
+                        type: 'PURCHASE',
+                        description: `${planType} plan purchased via Stripe`,
+                        balance_after: credits,
                     });
-
-                    if (authError) {
-                        console.error('Error creating auth user:', authError);
-                        break;
-                    }
-
-                    console.log('Auth user created:', authData.user?.id);
-
-                    // Create user profile with credits
-                    const { error: profileError } = await supabase
-                        .from('users')
-                        .insert({
-                            id: authData.user!.id,
-                            email,
-                            credits,
-                            current_plan: planType,
-                        });
-
-                    if (profileError) {
-                        console.error('Error creating user profile:', profileError);
-                    } else {
-                        console.log(`Created user ${authData.user!.id} with ${credits} credits`);
-
-                        // TODO: Send welcome email with temporary password
-                        console.log('Temporary password for', email, ':', tempPassword);
-                    }
                 }
 
                 break;

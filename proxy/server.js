@@ -9,7 +9,7 @@ const PORT = 3001;
 
 // Enable CORS for frontend
 app.use(cors({
-    origin: 'http://localhost:3000',
+    origin: ['http://localhost:3000', 'http://localhost:5173'],
     credentials: true
 }));
 
@@ -91,6 +91,98 @@ app.post('/api/apify/trends', async (req, res) => {
 
     } catch (error) {
         console.error('❌ Error:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Stripe Checkout endpoint (for local development)
+app.post('/api/checkout', async (req, res) => {
+    try {
+        const { priceId, userId, planType } = req.body;
+        const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+
+        if (!STRIPE_SECRET_KEY) {
+            return res.status(500).json({ error: 'STRIPE_SECRET_KEY not configured' });
+        }
+
+        if (!priceId || !userId || !planType) {
+            return res.status(400).json({ error: 'Missing required fields: priceId, userId, planType' });
+        }
+
+        const isOneTime = planType === 'TRIAL';
+        const checkoutMode = isOneTime ? 'payment' : 'subscription';
+
+        console.log(`💳 Creating Stripe checkout: plan=${planType}, userId=${userId}, mode=${checkoutMode}`);
+
+        const siteUrl = 'http://localhost:3000';
+
+        // Create Stripe checkout session via raw API call
+        const params = new URLSearchParams({
+            mode: checkoutMode,
+            'payment_method_types[0]': 'card',
+            'line_items[0][price]': priceId,
+            'line_items[0][quantity]': '1',
+            'success_url': `${siteUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}&userId=${userId}`,
+            'cancel_url': `${siteUrl}/?canceled=true`,
+            'metadata[userId]': userId,
+            'metadata[planType]': planType,
+        });
+
+        const stripeRes = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Basic ${Buffer.from(STRIPE_SECRET_KEY + ':').toString('base64')}`,
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: params.toString(),
+        });
+
+        const sessionData = await stripeRes.json();
+
+        if (!stripeRes.ok) {
+            console.error('❌ Stripe error:', sessionData);
+            return res.status(stripeRes.status).json({ error: sessionData.error?.message || 'Stripe error' });
+        }
+
+        console.log(`✅ Stripe session created: ${sessionData.id}`);
+        res.json({ url: sessionData.url, sessionId: sessionData.id });
+
+    } catch (error) {
+        console.error('❌ Checkout error:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Verify Stripe checkout session (for PaymentSuccess page fallback)
+app.post('/api/verify-session', async (req, res) => {
+    try {
+        const { sessionId } = req.body;
+        const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+
+        if (!STRIPE_SECRET_KEY || !sessionId) {
+            return res.status(400).json({ error: 'Missing sessionId or STRIPE_SECRET_KEY' });
+        }
+
+        const stripeRes = await fetch(`https://api.stripe.com/v1/checkout/sessions/${sessionId}`, {
+            headers: {
+                'Authorization': `Basic ${Buffer.from(STRIPE_SECRET_KEY + ':').toString('base64')}`,
+            },
+        });
+
+        const session = await stripeRes.json();
+
+        if (!stripeRes.ok) {
+            return res.status(stripeRes.status).json({ error: session.error?.message });
+        }
+
+        const planType = session.metadata?.planType || null;
+        const userId = session.metadata?.userId || null;
+
+        console.log(`✅ Session verified: ${sessionId}, plan=${planType}, userId=${userId}`);
+        res.json({ planType, userId, status: session.payment_status });
+
+    } catch (error) {
+        console.error('❌ Verify session error:', error.message);
         res.status(500).json({ error: error.message });
     }
 });

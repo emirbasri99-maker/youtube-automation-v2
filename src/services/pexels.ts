@@ -366,30 +366,63 @@ export function parseScriptIntoScenes(
         });
     }
 
-    // Distribute duration across scenes with 6-12 second limit per scene
+    // Auto-split scenes to match audio duration with 8-12 second scenes
     if (scenes.length > 0) {
-        const MIN_SCENE_DURATION = 6;
+        const MIN_SCENE_DURATION = 8;
         const MAX_SCENE_DURATION = 12;
+        const TARGET_SCENE_DURATION = 10; // Ideal scene length
 
-        // Calculate ideal duration per scene
-        let durationPerScene = totalDuration / scenes.length;
+        // Calculate minimum required scenes to cover totalDuration
+        const minRequiredScenes = Math.ceil(totalDuration / MAX_SCENE_DURATION);
 
-        // If scenes would be too long, split into more scenes
-        if (durationPerScene > MAX_SCENE_DURATION) {
-            console.warn(`Scenes would be ${durationPerScene}s each, splitting to max ${MAX_SCENE_DURATION}s`);
-            durationPerScene = MAX_SCENE_DURATION;
+        console.log(`Audio duration: ${totalDuration}s, Initial scenes: ${scenes.length}, Min required: ${minRequiredScenes}`);
+
+        // If we don't have enough scenes, split them
+        if (scenes.length < minRequiredScenes) {
+            console.warn(`Need to split ${scenes.length} scenes into ${minRequiredScenes} scenes to match ${totalDuration}s audio`);
+
+            const originalScenes = [...scenes];
+            scenes.length = 0; // Clear array
+
+            // Calculate how many new scenes each original should become
+            const splitFactor = Math.ceil(minRequiredScenes / originalScenes.length);
+
+            for (const originalScene of originalScenes) {
+                // Split voiceover text into chunks
+                const words = originalScene.voiceoverText.split(' ');
+                const wordsPerChunk = Math.ceil(words.length / splitFactor);
+
+                for (let i = 0; i < splitFactor; i++) {
+                    const startIdx = i * wordsPerChunk;
+                    const endIdx = Math.min(startIdx + wordsPerChunk, words.length);
+                    const chunkText = words.slice(startIdx, endIdx).join(' ');
+
+                    if (chunkText.trim()) {
+                        scenes.push({
+                            sceneNumber: scenes.length + 1,
+                            duration: 0, // Will be set below
+                            voiceoverText: chunkText,
+                            visualIntent: originalScene.visualIntent,
+                            emotionalTone: originalScene.emotionalTone,
+                            keywords: originalScene.keywords,
+                        });
+                    }
+                }
+            }
+
+            console.log(`Split into ${scenes.length} scenes`);
         }
 
-        // If scenes would be too short, extend them
-        if (durationPerScene < MIN_SCENE_DURATION) {
-            console.warn(`Scenes would be ${durationPerScene}s each, extending to min ${MIN_SCENE_DURATION}s`);
-            durationPerScene = MIN_SCENE_DURATION;
-        }
+        // Now distribute totalDuration evenly across all scenes
+        const durationPerScene = totalDuration / scenes.length;
 
-        console.log(`Setting scene duration: ${durationPerScene}s for ${scenes.length} scenes`);
+        // Clamp to reasonable range
+        const finalDuration = Math.max(MIN_SCENE_DURATION, Math.min(MAX_SCENE_DURATION, durationPerScene));
+
+        console.log(`Final: ${scenes.length} scenes @ ${finalDuration.toFixed(1)}s each = ${(scenes.length * finalDuration).toFixed(1)}s total`);
 
         scenes.forEach(scene => {
-            scene.duration = durationPerScene;
+            scene.duration = finalDuration;
         });
     }
 

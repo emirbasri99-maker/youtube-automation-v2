@@ -20,7 +20,7 @@ import {
     type GeneratedScene,
     type ShortsProgress
 } from '../services/shortsWan';
-import { saveVideo } from '../services/videoLibrary';
+import { saveVideo, uploadVideo } from '../services/videoLibrary';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -52,6 +52,8 @@ function ShortsCreate() {
     const [topic, setTopic] = useState('');
     const [manualScript, setManualScript] = useState('');
     const [sceneCount, setSceneCount] = useState(6);
+    const [durationMode, setDurationMode] = useState<'auto' | 'manual'>('auto');
+    const [manualDuration, setManualDuration] = useState(5);
     const [scenes, setScenes] = useState<SceneScript[]>([]);
 
     // Processing states
@@ -67,7 +69,7 @@ function ShortsCreate() {
             // Show notification
             addNotification({
                 type: 'success',
-                title: 'Trend önerisi yüklendi',
+                title: 'Trend suggestion loaded',
                 message: `✨ "${location.state.suggestedTopic}"`,
             });
         }
@@ -93,12 +95,32 @@ function ShortsCreate() {
     }, [sceneCount, aiModel]);
 
     // Merge all videos using FFmpeg
+    // Download helper function (works with cross-origin URLs)
+    const handleDownloadFile = async (url: string, filename: string) => {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            console.error('Download failed:', error);
+            // Fallback: open in new tab
+            window.open(url, '_blank');
+        }
+    };
+
     const handleMergeVideos = async () => {
         if (generatedScenes.length === 0 || !generatedScenes.every(s => s.videoUrl)) {
             addNotification({
                 type: 'warning',
-                title: 'Videolar Yok',
-                message: 'Birleştirilecek video bulunamadı.',
+                title: 'No Videos',
+                message: 'No videos found to merge.',
             });
             return;
         }
@@ -163,12 +185,51 @@ function ShortsCreate() {
             const outputBlob = new Blob([outputBuffer], { type: 'video/mp4' });
             const url = URL.createObjectURL(outputBlob);
 
-            setFinalVideoUrl(url);
+            // Upload to Supabase Storage
+            let publicUrl = url;
+            if (user) {
+                try {
+                    addNotification({
+                        type: 'info',
+                        title: 'Uploading',
+                        message: 'Uploading video to cloud...',
+                    });
+
+                    publicUrl = await uploadVideo(outputBlob, user.id);
+
+                    // Save to Library
+                    await saveVideo({
+                        id: crypto.randomUUID(),
+                        title: topic || 'Untitled Shorts',
+                        description: `Generated from topic: ${topic}`,
+                        type: 'shorts',
+                        createdAt: new Date().toISOString(),
+                        duration: sceneCount * 5, // Approximate duration
+                        videoUrl: publicUrl,
+                        userId: user.id
+                    });
+
+                    addNotification({
+                        type: 'success',
+                        title: 'Video Saved',
+                        message: 'Video added to your library!',
+                    });
+                } catch (saveError) {
+                    console.error('Failed to save to library:', saveError);
+                    addNotification({
+                        type: 'warning',
+                        title: 'Save Failed',
+                        message: `Video created but could not be saved: ${(saveError as any).message || 'Unknown error'}. Please download it.`,
+                    });
+                }
+            }
+
+            setFinalVideoUrl(publicUrl);
 
             addNotification({
                 type: 'success',
-                title: 'Video Birleştirildi!',
-                message: 'Shorts videonuz hazır!',
+                title: 'Video Ready!',
+                message: 'Your Shorts video has been created and is ready!',
             });
 
             // Cleanup
@@ -182,8 +243,8 @@ function ShortsCreate() {
             console.error('Merge error:', error);
             addNotification({
                 type: 'error',
-                title: 'Birleştirme Hatası',
-                message: error instanceof Error ? error.message : 'Bilinmeyen hata',
+                title: 'Merge Error',
+                message: error instanceof Error ? error.message : 'Unknown error',
             });
         } finally {
             setIsMerging(false);
@@ -195,27 +256,32 @@ function ShortsCreate() {
         if (!topic.trim()) {
             addNotification({
                 type: 'warning',
-                title: 'Konu Gerekli',
-                message: 'Lütfen shorts konusu girin.',
+                title: 'Topic Required',
+                message: 'Please enter a shorts topic.',
             });
             return;
         }
 
         setIsGeneratingScript(true);
         try {
-            const generatedScenes = await generateShortsScript(topic, sceneCount);
+            const generatedScenes = await generateShortsScript(
+                topic,
+                sceneCount,
+                durationMode,
+                manualDuration
+            );
             setScenes(generatedScenes);
             addNotification({
                 type: 'success',
-                title: 'Senaryo Hazır',
-                message: `${generatedScenes.length} sahnelik senaryo oluşturuldu!`,
+                title: 'Script Ready',
+                message: `Script with ${generatedScenes.length} scenes created!`,
             });
         } catch (error) {
             console.error('Script generation error:', error);
             addNotification({
                 type: 'error',
-                title: 'Senaryo Hatası',
-                message: error instanceof Error ? error.message : 'Bilinmeyen hata',
+                title: 'Script Error',
+                message: error instanceof Error ? error.message : 'Unknown error',
             });
         } finally {
             setIsGeneratingScript(false);
@@ -227,13 +293,18 @@ function ShortsCreate() {
         if (!manualScript.trim()) {
             addNotification({
                 type: 'warning',
-                title: 'Senaryo Gerekli',
-                message: 'Lütfen senaryo yazın.',
+                title: 'Script Required',
+                message: 'Please write a script first.',
             });
             return;
         }
 
-        const parsedScenes = parseManualScript(manualScript, sceneCount);
+        const parsedScenes = parseManualScript(
+            manualScript,
+            sceneCount,
+            durationMode,
+            manualDuration
+        );
         setScenes(parsedScenes);
         addNotification({
             type: 'success',
@@ -247,8 +318,8 @@ function ShortsCreate() {
         if (scenes.length === 0) {
             addNotification({
                 type: 'warning',
-                title: 'Senaryo Yok',
-                message: 'Önce senaryo oluşturun.',
+                title: 'No Script',
+                message: 'Please create a script first.',
             });
             return;
         }
@@ -257,8 +328,8 @@ function ShortsCreate() {
         if (!subscription || !user) {
             addNotification({
                 type: 'error',
-                title: 'Abonelik Gerekli',
-                message: 'Lütfen giriş yapın.',
+                title: 'Subscription Required',
+                message: 'Please log in first.',
             });
             return;
         }
@@ -311,8 +382,8 @@ function ShortsCreate() {
 
             addNotification({
                 type: 'success',
-                title: 'Shorts Hazır!',
-                message: `${results.length} sahne başarıyla oluşturuldu! ${cost} kredi kullanıldı.`,
+                title: 'Shorts Ready!',
+                message: `${results.length} scenes created successfully! ${cost} credits used.`,
             });
         } catch (error) {
             console.error('Processing error:', error);
@@ -339,8 +410,8 @@ function ShortsCreate() {
 
             addNotification({
                 type: 'error',
-                title: 'İşlem Hatası',
-                message: error instanceof Error ? error.message : 'Bilinmeyen hata',
+                title: 'Processing Error',
+                message: error instanceof Error ? error.message : 'Unknown error',
             });
         } finally {
             setIsProcessing(false);
@@ -396,7 +467,7 @@ function ShortsCreate() {
                             <div className="scene-count-selector">
                                 <label>Scene Count:</label>
                                 <div className="count-buttons">
-                                    {[2, 3, 4, 5, 6, 7, 8].map(n => (
+                                    {[1, 2, 3, 4, 5, 6, 7, 8].map(n => (
                                         <button
                                             key={n}
                                             className={sceneCount === n ? 'active' : ''}
@@ -406,7 +477,42 @@ function ShortsCreate() {
                                         </button>
                                     ))}
                                 </div>
-                                <small>{sceneCount * 8} - {sceneCount * 15} saniye arası video</small>
+                            </div>
+
+                            <div className="scene-duration-selector">
+                                <label>Duration per Scene:</label>
+                                <div className="duration-mode-buttons">
+                                    <button
+                                        className={durationMode === 'auto' ? 'active' : ''}
+                                        onClick={() => setDurationMode('auto')}
+                                    >
+                                        Auto (AI Decides)
+                                    </button>
+                                    <button
+                                        className={durationMode === 'manual' ? 'active' : ''}
+                                        onClick={() => setDurationMode('manual')}
+                                    >
+                                        Manual ({manualDuration}s)
+                                    </button>
+                                </div>
+
+                                {durationMode === 'manual' && (
+                                    <div className="duration-slider-container">
+                                        <input
+                                            type="range"
+                                            min="5"
+                                            max="15"
+                                            value={manualDuration}
+                                            onChange={(e) => setManualDuration(Number(e.target.value))}
+                                            className="duration-slider"
+                                        />
+                                        <div className="slider-labels">
+                                            <span>5s</span>
+                                            <span className="current-val">{manualDuration}s</span>
+                                            <span>15s</span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <button
@@ -432,15 +538,15 @@ function ShortsCreate() {
                     {/* Manual Mode */}
                     {mode === 'manual' && (
                         <div className="input-section">
-                            <h3><FileText size={18} /> Senaryonuzu Yazın</h3>
+                            <h3><FileText size={18} /> Write Your Script</h3>
                             <textarea
-                                placeholder={`Sahne 1: Astronot Mars yüzeyinde yürüyor, kırmızı toprak ve kayalar görünüyor
+                                placeholder={`Scene 1: Astronaut walking on Mars surface, red soil and rocks visible
 
-Sahne 2: Astronot eğilip garip bir bitki buluyor, mor renkli ve parlıyor
+Scene 2: Astronaut bends down and finds a strange plant, purple and glowing
 
-Sahne 3: Bitkiye yakın çekim, yaprakları yavaşça hareket ediyor
+Scene 3: Close-up of the plant, its leaves slowly moving
 
-...devam edin`}
+...continue`}
                                 value={manualScript}
                                 onChange={(e) => setManualScript(e.target.value)}
                                 rows={8}
@@ -449,7 +555,7 @@ Sahne 3: Bitkiye yakın çekim, yaprakları yavaşça hareket ediyor
                             <div className="scene-count-selector">
                                 <label>Scene Count:</label>
                                 <div className="count-buttons">
-                                    {[2, 3, 4, 5, 6, 7, 8].map(n => (
+                                    {[1, 2, 3, 4, 5, 6, 7, 8].map(n => (
                                         <button
                                             key={n}
                                             className={sceneCount === n ? 'active' : ''}
@@ -467,7 +573,7 @@ Sahne 3: Bitkiye yakın çekim, yaprakları yavaşça hareket ediyor
                                 disabled={!manualScript.trim()}
                             >
                                 <Check size={18} />
-                                Senaryoyu Onayla
+                                Confirm Script
                             </button>
                         </div>
                     )}
@@ -475,12 +581,12 @@ Sahne 3: Bitkiye yakın çekim, yaprakları yavaşça hareket ediyor
                     {/* Generated Scenes Preview */}
                     {scenes.length > 0 && (
                         <div className="scenes-preview">
-                            <h3><Film size={18} /> Sahneler ({scenes.length} sahne, ~{totalDuration}s)</h3>
+                            <h3><Film size={18} /> Scenes ({scenes.length} scenes, ~{totalDuration}s)</h3>
                             <div className="scenes-grid">
                                 {scenes.map((scene) => (
                                     <div key={scene.sceneNumber} className="scene-card">
                                         <div className="scene-header">
-                                            <span className="scene-number">Sahne {scene.sceneNumber}</span>
+                                            <span className="scene-number">Scene {scene.sceneNumber}</span>
                                             <span className="scene-duration">{scene.duration}s</span>
                                         </div>
                                         <p className="scene-desc">{scene.description}</p>
@@ -493,7 +599,7 @@ Sahne 3: Bitkiye yakın çekim, yaprakları yavaşça hareket ediyor
                             <CreditPreview
                                 estimatedCost={estimatedCost}
                                 currentBalance={subscription?.credits || 0}
-                                operation="Shorts oluşturma"
+                                operation="Shorts creation"
                             />
 
                             <button
@@ -550,26 +656,26 @@ Sahne 3: Bitkiye yakın çekim, yaprakları yavaşça hareket ediyor
                                             ) : scene.imageUrl ? (
                                                 <img
                                                     src={scene.imageUrl}
-                                                    alt={`Sahne ${scene.sceneNumber}`}
+                                                    alt={`Scene ${scene.sceneNumber}`}
                                                     crossOrigin="anonymous"
                                                     onError={(e) => console.error('Image load error:', e)}
                                                 />
                                             ) : (
-                                                <div className="loading-placeholder">Yükleniyor...</div>
+                                                <div className="loading-placeholder">Loading...</div>
                                             )}
                                         </div>
                                         <div className="result-info">
-                                            <span>Sahne {scene.sceneNumber}</span>
+                                            <span>Scene {scene.sceneNumber}</span>
                                             <span>{scene.duration}s</span>
                                         </div>
                                         <div className="result-actions">
-                                            <a href={scene.imageUrl} download className="btn btn-sm">
-                                                <ImageIcon size={14} /> Görsel
-                                            </a>
+                                            <button onClick={() => handleDownloadFile(scene.imageUrl, `scene_${scene.sceneNumber}.png`)} className="btn btn-sm">
+                                                <ImageIcon size={14} /> Image
+                                            </button>
                                             {scene.videoUrl && (
-                                                <a href={scene.videoUrl} download className="btn btn-sm">
+                                                <button onClick={() => handleDownloadFile(scene.videoUrl, `scene_${scene.sceneNumber}.mp4`)} className="btn btn-sm">
                                                     <Download size={14} /> Video
-                                                </a>
+                                                </button>
                                             )}
                                         </div>
                                     </div>
@@ -586,31 +692,30 @@ Sahne 3: Bitkiye yakın çekim, yaprakları yavaşça hareket ediyor
                                         {isMerging ? (
                                             <>
                                                 <RefreshCw size={20} className="spin" />
-                                                Videolar Birleştiriliyor...
+                                                Merging Videos...
                                             </>
                                         ) : (
                                             <>
                                                 <Film size={20} />
-                                                🎬 Tüm Videoları Birleştir
+                                                🎬 Merge All Videos
                                             </>
                                         )}
                                     </button>
                                 ) : (
                                     <div className="final-video">
-                                        <h4>🎉 Shorts Videonuz Hazır!</h4>
+                                        <h4>🎉 Your Shorts Video is Ready!</h4>
                                         <video
                                             src={finalVideoUrl}
                                             controls
                                             className="final-video-player"
                                         />
-                                        <a
-                                            href={finalVideoUrl}
-                                            download="shorts_video.mp4"
+                                        <button
+                                            onClick={() => handleDownloadFile(finalVideoUrl!, 'shorts_video.mp4')}
                                             className="btn btn-primary btn-lg"
                                         >
                                             <Download size={20} />
-                                            Videoyu İndir
-                                        </a>
+                                            Download Video
+                                        </button>
                                     </div>
                                 )}
                             </div>
@@ -621,7 +726,7 @@ Sahne 3: Bitkiye yakın çekim, yaprakları yavaşça hareket ediyor
                 {/* Sidebar */}
                 <div className="shorts-sidebar">
                     <div className="sidebar-card">
-                        <h3>🔥 Trend Konular</h3>
+                        <h3>🔥 Trending Topics</h3>
                         <div className="trending-list">
                             {trendingTopics.map((item) => (
                                 <button
@@ -639,40 +744,42 @@ Sahne 3: Bitkiye yakın çekim, yaprakları yavaşça hareket ediyor
                     <div className="sidebar-card">
                         <h3>💡 Shorts Tips</h3>
                         <ul className="tips-list">
-                            <li>✓ İlk 1 saniyede dikkat çek</li>
-                            <li>✓ Dikey format (9:16) kullan</li>
-                            <li>✓ 6-8 sahne ideal</li>
-                            <li>✓ Her sahne 8-15 saniye</li>
-                            <li>✓ Görsel tutarlılık önemli</li>
+                            <li>✓ Hook viewers in the first 1 second</li>
+                            <li>✓ Use vertical format (9:16)</li>
+                            <li>✓ 6-8 scenes is ideal</li>
+                            <li>✓ Each scene 8-15 seconds</li>
+                            <li>✓ Visual consistency is key</li>
                         </ul>
                     </div>
 
                     <div className="sidebar-card info">
                         <h3><AlertCircle size={16} /> How It Works?</h3>
                         <ol>
-                            <li>Konu yaz veya senaryo gir</li>
-                            <li>AI sahne sahne görsel oluşturur</li>
-                            <li>Görseller videoya dönüştürülür</li>
-                            <li>Videoları indir ve birleştir</li>
+                            <li>Enter a topic or write a script</li>
+                            <li>AI generates visuals scene by scene</li>
+                            <li>Images are converted to video</li>
+                            <li>Download and merge your videos</li>
                         </ol>
                     </div>
                 </div>
             </div>
 
             {/* Upgrade Modal */}
-            {showUpgradeModal && subscription && (
-                <UpgradeModal
-                    isOpen={showUpgradeModal}
-                    onClose={() => setShowUpgradeModal(false)}
-                    currentPlan={subscription.plan_type as PlanType}
-                    requiredPlan={PlanType.PROFESSIONAL}
-                    feature={upgradeReason || 'Premium features'}
-                    onUpgrade={(planType) => {
-                        upgradeSubscription(planType);
-                        setShowUpgradeModal(false);
-                    }}
-                />
-            )}
+            {
+                showUpgradeModal && subscription && (
+                    <UpgradeModal
+                        isOpen={showUpgradeModal}
+                        onClose={() => setShowUpgradeModal(false)}
+                        currentPlan={subscription.plan_type as PlanType}
+                        requiredPlan={PlanType.PROFESSIONAL}
+                        feature={upgradeReason || 'Premium features'}
+                        onUpgrade={(planType) => {
+                            upgradeSubscription(planType);
+                            setShowUpgradeModal(false);
+                        }}
+                    />
+                )
+            }
 
             {/* Insufficient Credits Modal */}
             <InsufficientCreditsModal
@@ -680,9 +787,9 @@ Sahne 3: Bitkiye yakın çekim, yaprakları yavaşça hareket ediyor
                 onClose={() => setShowInsufficientCreditsModal(false)}
                 required={estimatedCost}
                 available={subscription?.credits || 0}
-                operation="Shorts oluşturma"
+                operation="Shorts creation"
             />
-        </div>
+        </div >
     );
 }
 

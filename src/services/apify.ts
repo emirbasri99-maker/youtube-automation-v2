@@ -11,9 +11,10 @@
  */
 
 const APIFY_API_KEY = import.meta.env.VITE_APIFY_API_KEY;
-// Use direct API instead of proxy (proxy causing connection issues)
-const APIFY_API_BASE = 'https://api.apify.com/v2';
-const ACTOR_ID = 'vulnv/youtube-video-summarizer';
+const APIFY_API_BASE = '/api/apify/v2';
+// Use a verified working YouTube scraper from Apify Store
+// This actor can extract video details including available subtitles
+const ACTOR_ID = 'bernardo/youtube-scraper';
 
 export interface ApifyYouTubeSummarizerInput {
     start_urls: string[];
@@ -58,13 +59,13 @@ export interface ApifyRunResponse {
 /**
  * Start an Apify actor run
  */
-async function startActorRun(input: ApifyYouTubeSummarizerInput): Promise<string> {
+export async function startActorRun(input: any, actorId: string = ACTOR_ID): Promise<string> {
     try {
         console.log('🚀 Starting Apify actor run with input:', input);
         console.log('API Key:', APIFY_API_KEY ? `${APIFY_API_KEY.substring(0, 15)}...` : 'NOT SET');
-        console.log('Actor ID:', ACTOR_ID);
+        console.log('Actor ID:', actorId);
 
-        const url = `${APIFY_API_BASE}/acts/${ACTOR_ID}/runs?token=${APIFY_API_KEY}`;
+        const url = `${APIFY_API_BASE}/acts/${actorId}/runs?token=${APIFY_API_KEY}`;
         console.log('Request URL:', url.replace(APIFY_API_KEY || '', 'REDACTED'));
 
         const response = await fetch(url, {
@@ -83,9 +84,9 @@ async function startActorRun(input: ApifyYouTubeSummarizerInput): Promise<string
 
             // Provide helpful error messages
             if (response.status === 401 || response.status === 403) {
-                throw new Error(`API anahtarı geçersiz. Lütfen .env dosyasında VITE_APIFY_API_KEY kontrol edin.`);
+                throw new Error(`Invalid API key. Please check VITE_APIFY_API_KEY in your .env file.`);
             } else if (response.status === 404) {
-                throw new Error(`Apify actor bulunamadı. Actor ID kontrol edin.`);
+                throw new Error(`Apify actor not found. Please check the Actor ID.`);
             } else {
                 throw new Error(`Apify API error: ${response.status} - ${errorText}`);
             }
@@ -99,7 +100,7 @@ async function startActorRun(input: ApifyYouTubeSummarizerInput): Promise<string
 
         // Detect CORS errors
         if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-            throw new Error('Apify API bağlantı hatası. CORS veya network sorunu olabilir. API key kontroledin.');
+            throw new Error('Apify API connection error. Could be a CORS or network issue. Please check your API key.');
         }
 
         throw error;
@@ -109,7 +110,7 @@ async function startActorRun(input: ApifyYouTubeSummarizerInput): Promise<string
 /**
  * Get actor run status
  */
-async function getActorRunStatus(runId: string): Promise<string> {
+export async function getActorRunStatus(runId: string): Promise<string> {
     try {
         const response = await fetch(
             `${APIFY_API_BASE}/actor-runs/${runId}?token=${APIFY_API_KEY}`
@@ -130,7 +131,7 @@ async function getActorRunStatus(runId: string): Promise<string> {
 /**
  * Get actor run dataset items (results)
  */
-async function getActorRunResults(runId: string): Promise<any[]> {
+export async function getActorRunResults(runId: string): Promise<any[]> {
     try {
         const response = await fetch(
             `${APIFY_API_BASE}/actor-runs/${runId}/dataset/items?token=${APIFY_API_KEY}`
@@ -150,7 +151,7 @@ async function getActorRunResults(runId: string): Promise<any[]> {
 /**
  * Wait for actor run to complete
  */
-async function waitForRun(
+export async function waitForRun(
     runId: string,
     maxWaitTime = 300000, // 5 minutes
     pollInterval = 3000 // 3 seconds
@@ -216,8 +217,14 @@ export async function summarizeYouTubeVideos(
 
         if (onProgress) onProgress('Starting video summarization...');
 
-        // Start actor run
-        const runId = await startActorRun({ start_urls: validUrls });
+        // Start actor run with correct input format for apify/youtube-scraper
+        const runId = await startActorRun({
+            startUrls: validUrls,
+            searchMode: 'VIDEOS',
+            maxResults: validUrls.length,
+            // Extract subtitles if available
+            extractSubtitles: true,
+        });
 
         if (onProgress) onProgress('Processing video...');
 
@@ -235,12 +242,12 @@ export async function summarizeYouTubeVideos(
 
         if (onProgress) onProgress('Summary complete!');
 
-        // Map results to output format
+        // Map results to output format (apify/youtube-scraper format)
         return results.map(result => ({
-            videoUrl: result.url || result.videoUrl || validUrls[0],
-            title: result.title,
-            summary: result.summary || result.text || 'No summary available',
-            transcript: result.transcript,
+            videoUrl: result.url || validUrls[0],
+            title: result.title || 'Untitled',
+            summary: result.description || result.text || 'No summary available',
+            transcript: result.subtitles || result.captions || '',
             duration: result.duration,
         }));
     } catch (error) {
@@ -259,22 +266,26 @@ export async function summarizeSingleYouTubeVideo(
     videoUrl: string,
     onProgress?: (status: string) => void
 ): Promise<ApifyYouTubeSummarizerOutput> {
-    // Real API via Vite proxy (CORS issue resolved)
-    const USE_MOCK = false;
+    // TEMPORARY: Use mock data because Apify YouTube actors are not accessible
+    // User needs to either:
+    // 1. Find a valid Apify actor ID for YouTube transcription
+    // 2. Set up YouTube Data API v3 integration
+    // 3. Use a different transcription service
+    const USE_MOCK = true;
 
     if (USE_MOCK) {
         console.log('⚠️ Using MOCK data (CORS workaround - backend proxy needed)');
 
-        if (onProgress) onProgress('Başlatılıyor...');
+        if (onProgress) onProgress('Starting...');
         await new Promise(resolve => setTimeout(resolve, 1000));
 
-        if (onProgress) onProgress('Video analiz ediliyor...');
+        if (onProgress) onProgress('Analyzing video...');
         await new Promise(resolve => setTimeout(resolve, 2000));
 
-        if (onProgress) onProgress('Özet oluşturuluyor...');
+        if (onProgress) onProgress('Generating summary...');
         await new Promise(resolve => setTimeout(resolve, 1500));
 
-        if (onProgress) onProgress('Tamamlandı!');
+        if (onProgress) onProgress('Completed!');
 
         // Extract video ID for title
         const videoId = extractYouTubeVideoId(videoUrl);

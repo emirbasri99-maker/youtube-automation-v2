@@ -1,0 +1,18 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "Backend server for YouTube Automation",
+  "main": "tts-server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node tts-server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@aws-sdk/client-polly": "^3.990.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "edge-tts-universal": "^1.3.3",
+    "express": "^5.2.1"
+  }
+}

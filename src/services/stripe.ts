@@ -24,8 +24,16 @@ export async function createCheckoutSession(planType: PlanType, userId: string):
         console.log('UserId:', userId);
         console.log('Calling Netlify function at: /.netlify/functions/checkout');
 
+        // Determine API URL based on environment
+        // In development (localhost), point to the local proxy server
+        const apiUrl = import.meta.env.DEV
+            ? 'http://localhost:3001/api/checkout'
+            : '/.netlify/functions/checkout';
+
+        console.log('Using API URL:', apiUrl);
+
         // Call backend API to create checkout session
-        const response = await fetch('/.netlify/functions/checkout', {
+        const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

@@ -30,14 +30,33 @@ function Library() {
         loadVideos();
     }, []);
 
-    const loadVideos = () => {
-        const allVideos = getVideos();
+    const loadVideos = async () => {
+        const allVideos = await getVideos();
         setVideos(allVideos);
     };
 
-    const handleDelete = (id: string) => {
-        if (confirm('Bu videoyu silmek istediğinize emin misiniz?')) {
-            deleteVideo(id);
+    // Download helper function (works with cross-origin URLs)
+    const handleDownloadFile = async (url: string, filename: string) => {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            console.error('Download failed:', error);
+            window.open(url, '_blank');
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        if (confirm('Are you sure you want to delete this video?')) {
+            await deleteVideo(id);
             loadVideos();
         }
     };
@@ -50,7 +69,7 @@ function Library() {
 
     const formatDate = (dateString: string) => {
         const date = new Date(dateString);
-        return date.toLocaleDateString('tr-TR', {
+        return date.toLocaleDateString('en-US', {
             day: 'numeric',
             month: 'short',
             year: 'numeric',
@@ -90,7 +109,7 @@ function Library() {
                         <Filter size={18} />
                         <select value={filter} onChange={(e) => setFilter(e.target.value as FilterType)}>
                             <option value="all">All</option>
-                            <option value="long">Uzun Videolar</option>
+                            <option value="long">Long Videos</option>
                             <option value="shorts">Shorts</option>
                         </select>
                     </div>
@@ -100,7 +119,7 @@ function Library() {
                         <select value={sort} onChange={(e) => setSort(e.target.value as SortType)}>
                             <option value="newest">Newest First</option>
                             <option value="oldest">Oldest First</option>
-                            <option value="title">Başlığa Göre</option>
+                            <option value="title">By Title</option>
                         </select>
                     </div>
                 </div>
@@ -151,20 +170,19 @@ function Library() {
                                 </div>
 
                                 <div className="video-actions">
-                                    <a
-                                        href={video.videoUrl}
-                                        download={`${video.title}.mp4`}
+                                    <button
                                         className="btn btn-primary"
+                                        onClick={() => handleDownloadFile(video.videoUrl, `${video.title}.mp4`)}
                                     >
                                         <Download size={16} />
-                                        İndir
-                                    </a>
+                                        Download
+                                    </button>
                                     <button
                                         className="btn btn-danger"
                                         onClick={() => handleDelete(video.id)}
                                     >
                                         <Trash2 size={16} />
-                                        Sil
+                                        Delete
                                     </button>
                                 </div>
                             </div>

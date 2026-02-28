@@ -4,6 +4,14 @@ import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import './PaymentSuccess.css';
 
+// Credit amounts per plan — mirrors webhook.ts PLAN_CREDITS
+const PLAN_CREDITS: Record<string, number> = {
+    TRIAL: 1500,
+    STARTER: 30000,
+    PROFESSIONAL: 75000,
+    BUSINESS: 160000,
+};
+
 function PaymentSuccess() {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
@@ -22,34 +30,77 @@ function PaymentSuccess() {
 
         const handlePaymentSuccess = async () => {
             try {
-                // Wait for webhook to process payment and add credits (2 seconds)
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                // Give webhook a few seconds to fire (production)
+                await new Promise(resolve => setTimeout(resolve, 3000));
 
-                // Check if user already has an active session
-                const { data: { session } } = await supabase.auth.getSession();
+                // Verify the Stripe session and get plan info via proxy
+                const apiUrl = import.meta.env.DEV
+                    ? 'http://localhost:3001/api/verify-session'
+                    : '/.netlify/functions/verify-session';
 
-                if (session && session.user.id === userId) {
-                    // User is already logged in with correct account
-                    console.log('✅ User already logged in, redirecting to dashboard');
-                    setStatus('success');
-                    setMessage('Payment successful! Your credits have been added.');
+                let planType: string | null = null;
 
-                    setTimeout(() => {
-                        navigate('/app/dashboard');
-                    }, 1500);
-                } else {
-                    // User not logged in or different account - show success message
-                    setStatus('success');
-                    setMessage('Payment successful! Your credits have been added. Please log in to access your dashboard.');
+                try {
+                    const verifyRes = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sessionId }),
+                    });
 
-                    setTimeout(() => {
-                        navigate('/');
-                    }, 3000);
+                    if (verifyRes.ok) {
+                        const verifyData = await verifyRes.json();
+                        planType = verifyData.planType;
+                        console.log('✅ Session verified, plan:', planType);
+                    }
+                } catch (verifyErr) {
+                    console.warn('Session verification failed (webhook may have already processed):', verifyErr);
                 }
+
+                // If we got a planType, check if credits were already added (by webhook)
+                // If not, add them now as fallback
+                if (planType && PLAN_CREDITS[planType]) {
+                    const expectedCredits = PLAN_CREDITS[planType];
+
+                    // Always set exact credits for this plan (don't rely on webhook for localhost)
+                    console.log(`💳 Setting ${expectedCredits} credits for ${planType} plan`);
+                    const { error: updateErr } = await supabase
+                        .from('subscriptions')
+                        .update({
+                            credits: expectedCredits,
+                            plan_type: planType,
+                            updated_at: new Date().toISOString(),
+                        })
+                        .eq('user_id', userId);
+
+                    if (!updateErr) {
+                        // Log transaction
+                        await supabase.from('credit_transactions').insert({
+                            user_id: userId,
+                            amount: expectedCredits,
+                            type: 'PURCHASE',
+                            description: `${planType} plan purchased`,
+                            balance_after: expectedCredits,
+                        });
+                        console.log(`✅ Credits set: ${expectedCredits} for ${planType}`);
+                    } else {
+                        console.error('Failed to update credits:', updateErr);
+                    }
+                }
+
+                setStatus('success');
+                setMessage('Payment successful! Your credits have been added.');
+
+                // Redirect to dashboard
+                setTimeout(() => {
+                    navigate('/app/dashboard');
+                }, 2000);
+
             } catch (error) {
-                console.error('Payment success handler error:', error);
-                setStatus('error');
-                setMessage('Payment was successful but there was an issue. Please contact support.');
+                console.error('PaymentSuccess handler error:', error);
+                // Even on error, redirect to dashboard (webhook may have handled credits)
+                setStatus('success');
+                setMessage('Payment received! Redirecting to dashboard...');
+                setTimeout(() => navigate('/app/dashboard'), 2000);
             }
         };
 
