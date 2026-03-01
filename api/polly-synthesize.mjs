@@ -1,104 +1,85 @@
-import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
-
-const pollyClient = new PollyClient({
-    region: process.env.AWS_REGION || 'eu-west-1',
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    },
-});
-
-const MAX_CHUNK_SIZE = 2800;
-
-async function synthesizeChunk(text, voiceId, engine) {
-    const command = new SynthesizeSpeechCommand({
-        Text: text,
-        VoiceId: voiceId,
-        OutputFormat: 'mp3',
-        Engine: engine,
-    });
-    const response = await pollyClient.send(command);
-    const chunks = [];
-    for await (const chunk of response.AudioStream) {
-        chunks.push(chunk);
-    }
-    return Buffer.concat(chunks);
-}
-
+/**
+ * Netlify Function: polly-synthesize
+ * Uses OpenAI TTS API to synthesize speech (replaces AWS Polly)
+ * POST /api/polly/synthesize
+ * Body: { text, voiceId, engine }
+ */
 export const handler = async (event) => {
     if (event.httpMethod === 'OPTIONS') {
         return {
             statusCode: 200,
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            },
+            headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' },
             body: '',
         };
     }
 
     try {
-        const { text, voiceId = 'Ruth', engine = 'neural' } = JSON.parse(event.body || '{}');
+        const { text, voiceId = 'alloy' } = JSON.parse(event.body || '{}');
 
         if (!text || !text.trim()) {
-            return {
-                statusCode: 400,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({ error: 'Text cannot be empty' }),
-            };
+            return { statusCode: 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ error: 'Text cannot be empty' }) };
         }
 
-        console.log(`🎤 Synthesizing: voice=${voiceId}, engine=${engine}, length=${text.length}`);
+        const apiKey = process.env.VITE_OPENAI_API_KEY;
+        if (!apiKey) {
+            return { statusCode: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ error: 'OpenAI API key not configured' }) };
+        }
 
-        let audioBuffer;
+        // Map AWS Polly voice IDs to OpenAI voices
+        const voiceMap = {
+            'Ruth': 'nova', 'Joanna': 'nova', 'Kendra': 'nova', 'Kimberly': 'nova', 'Salli': 'shimmer',
+            'Amy': 'shimmer', 'Emma': 'shimmer', 'Ivy': 'alloy',
+            'Matthew': 'onyx', 'Justin': 'echo', 'Joey': 'fable', 'Stephen': 'echo',
+            'Brian': 'onyx', 'Arthur': 'fable',
+            'alloy': 'alloy', 'echo': 'echo', 'fable': 'fable', 'onyx': 'onyx', 'nova': 'nova', 'shimmer': 'shimmer',
+        };
+        const openaiVoice = voiceMap[voiceId] || 'nova';
 
-        if (text.length <= MAX_CHUNK_SIZE) {
-            // Short text — single request
-            audioBuffer = await synthesizeChunk(text, voiceId, engine);
-        } else {
-            // Long text — split into sentence chunks
-            const sentences = text.match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) || [text];
-            let currentChunk = '';
-            const textChunks = [];
+        // OpenAI TTS has 4096 char limit per request — split if needed
+        const MAX_CHUNK = 4000;
+        const chunks = [];
+        let remaining = text.trim();
 
-            for (const sentence of sentences) {
-                if ((currentChunk + sentence).length < MAX_CHUNK_SIZE) {
-                    currentChunk += sentence;
-                } else {
-                    if (currentChunk) textChunks.push(currentChunk.trim());
-                    currentChunk = sentence;
-                    while (currentChunk.length >= MAX_CHUNK_SIZE) {
-                        textChunks.push(currentChunk.substring(0, MAX_CHUNK_SIZE));
-                        currentChunk = currentChunk.substring(MAX_CHUNK_SIZE);
-                    }
-                }
+        while (remaining.length > 0) {
+            if (remaining.length <= MAX_CHUNK) {
+                chunks.push(remaining);
+                break;
             }
-            if (currentChunk.trim()) textChunks.push(currentChunk.trim());
-
-            console.log(`🧩 Split into ${textChunks.length} chunks`);
-            const buffers = await Promise.all(
-                textChunks.map(chunk => synthesizeChunk(chunk, voiceId, engine))
-            );
-            audioBuffer = Buffer.concat(buffers);
+            // Find last sentence boundary before MAX_CHUNK
+            const slice = remaining.substring(0, MAX_CHUNK);
+            const lastPeriod = Math.max(slice.lastIndexOf('. '), slice.lastIndexOf('! '), slice.lastIndexOf('? '));
+            const cutAt = lastPeriod > 0 ? lastPeriod + 2 : MAX_CHUNK;
+            chunks.push(remaining.substring(0, cutAt));
+            remaining = remaining.substring(cutAt);
         }
+
+        const audioBuffers = [];
+        for (const chunk of chunks) {
+            const response = await fetch('https://api.openai.com/v1/audio/speech', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: 'tts-1', input: chunk, voice: openaiVoice }),
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`OpenAI TTS error: ${response.status} - ${errText}`);
+            }
+
+            const arrayBuffer = await response.arrayBuffer();
+            audioBuffers.push(Buffer.from(arrayBuffer));
+        }
+
+        const finalBuffer = Buffer.concat(audioBuffers);
 
         return {
             statusCode: 200,
-            headers: {
-                'Content-Type': 'audio/mpeg',
-                'Access-Control-Allow-Origin': '*',
-                'Content-Length': String(audioBuffer.length),
-            },
-            body: audioBuffer.toString('base64'),
+            headers: { 'Content-Type': 'audio/mpeg', 'Access-Control-Allow-Origin': '*', 'Content-Length': String(finalBuffer.length) },
+            body: finalBuffer.toString('base64'),
             isBase64Encoded: true,
         };
     } catch (error) {
-        console.error('Polly synthesis error:', error);
-        return {
-            statusCode: 500,
-            headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-            body: JSON.stringify({ error: error.message }),
-        };
+        console.error('TTS synthesis error:', error);
+        return { statusCode: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ error: error.message }) };
     }
 };
