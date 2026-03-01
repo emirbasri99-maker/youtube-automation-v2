@@ -6,11 +6,29 @@
 [build.environment]
   NODE_VERSION = "18"
 
+# Polly TTS function routes
+[[redirects]]
+  from = "/api/polly/voices"
+  to = "/.netlify/functions/polly-voices"
+  status = 200
+
+[[redirects]]
+  from = "/api/polly/synthesize"
+  to = "/.netlify/functions/polly-synthesize"
+  status = 200
+
+[[redirects]]
+  from = "/api/polly/preview"
+  to = "/.netlify/functions/polly-preview"
+  status = 200
+
+# Generic API redirect
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
 
+# SPA fallback
 [[redirects]]
   from = "/*"
   to = "/index.html"
@@ -18,4 +36,5 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["stripe"]
+  external_node_modules = ["stripe", "@aws-sdk/client-polly"]
+
